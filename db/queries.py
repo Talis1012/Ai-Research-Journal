@@ -1,0 +1,696 @@
+from db.database import get_connection
+
+
+def create_project(name: str, domain: str, description: str = "") -> int:
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        INSERT INTO projects (name, domain, description)
+        VALUES (?, ?, ?)
+        """,
+        (name, domain, description)
+    )
+
+    project_id = cur.lastrowid
+
+    conn.commit()
+    conn.close()
+
+    return project_id
+
+
+def get_projects():
+    conn = get_connection()
+
+    projects = conn.execute(
+        """
+        SELECT *
+        FROM projects
+        ORDER BY created_at DESC
+        """
+    ).fetchall()
+
+    conn.close()
+
+    return projects
+
+
+def get_project_by_id(project_id: int):
+    conn = get_connection()
+
+    project = conn.execute(
+        """
+        SELECT *
+        FROM projects
+        WHERE id = ?
+        """,
+        (project_id,)
+    ).fetchone()
+
+    conn.close()
+
+    return project
+
+
+def create_chat(project_id: int, title: str, objective: str = "") -> int:
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        INSERT INTO chats (project_id, title, objective)
+        VALUES (?, ?, ?)
+        """,
+        (project_id, title, objective)
+    )
+
+    chat_id = cur.lastrowid
+
+    conn.commit()
+    conn.close()
+
+    return chat_id
+
+
+def get_chats(project_id: int):
+    conn = get_connection()
+
+    chats = conn.execute(
+        """
+        SELECT *
+        FROM chats
+        WHERE project_id = ?
+        ORDER BY created_at DESC
+        """,
+        (project_id,)
+    ).fetchall()
+
+    conn.close()
+
+    return chats
+
+
+def get_chat_by_id(chat_id: int):
+    conn = get_connection()
+
+    chat = conn.execute(
+        """
+        SELECT *
+        FROM chats
+        WHERE id = ?
+        """,
+        (chat_id,)
+    ).fetchone()
+
+    conn.close()
+
+    return chat
+
+
+def add_message(chat_id: int, role: str, message_type: str, content: str) -> int:
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        INSERT INTO messages (chat_id, role, type, content)
+        VALUES (?, ?, ?, ?)
+        """,
+        (chat_id, role, message_type, content)
+    )
+
+    message_id = cur.lastrowid
+
+    conn.commit()
+    conn.close()
+
+    return message_id
+
+
+def get_messages(chat_id: int):
+    conn = get_connection()
+
+    messages = conn.execute(
+        """
+        SELECT *
+        FROM messages
+        WHERE chat_id = ?
+        ORDER BY created_at ASC
+        """,
+        (chat_id,)
+    ).fetchall()
+
+    conn.close()
+
+    return messages
+
+def create_audio_record(
+    chat_id: int,
+    file_path: str,
+    transcript: str = "",
+    message_id: int | None = None
+) -> int:
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        INSERT INTO audio_records (chat_id, message_id, file_path, transcript)
+        VALUES (?, ?, ?, ?)
+        """,
+        (chat_id, message_id, file_path, transcript)
+    )
+
+    audio_record_id = cur.lastrowid
+
+    conn.commit()
+    conn.close()
+
+    return audio_record_id
+
+
+def get_audio_records(chat_id: int):
+    conn = get_connection()
+
+    audio_records = conn.execute(
+        """
+        SELECT *
+        FROM audio_records
+        WHERE chat_id = ?
+        ORDER BY created_at ASC
+        """,
+        (chat_id,)
+    ).fetchall()
+
+    conn.close()
+
+    return audio_records
+
+def update_message_content(message_id: int, new_content: str):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        UPDATE messages
+        SET content = ?
+        WHERE id = ?
+        """,
+        (new_content, message_id)
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def update_audio_transcript_by_message_id(message_id: int, new_transcript: str):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        UPDATE audio_records
+        SET transcript = ?
+        WHERE message_id = ?
+        """,
+        (new_transcript, message_id)
+    )
+
+    conn.commit()
+    conn.close()
+
+def get_audio_record_by_message_id(message_id: int):
+    conn = get_connection()
+
+    audio_record = conn.execute(
+        """
+        SELECT *
+        FROM audio_records
+        WHERE message_id = ?
+        """,
+        (message_id,)
+    ).fetchone()
+
+    conn.close()
+
+    return audio_record
+
+
+def delete_audio_record_by_message_id(message_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        DELETE FROM audio_records
+        WHERE message_id = ?
+        """,
+        (message_id,)
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def delete_message(message_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        DELETE FROM messages
+        WHERE id = ?
+        """,
+        (message_id,)
+    )
+
+    conn.commit()
+    conn.close()
+
+#----------------------- AI ----------------------------
+
+def get_project_messages(project_id: int):
+    conn = get_connection()
+
+    messages = conn.execute(
+        """
+        SELECT
+            messages.*,
+            chats.title AS chat_title
+        FROM messages
+        JOIN chats ON messages.chat_id = chats.id
+        WHERE chats.project_id = ?
+        ORDER BY chats.created_at ASC, messages.created_at ASC
+        """,
+        (project_id,)
+    ).fetchall()
+
+    conn.close()
+
+    return messages
+
+
+def save_summary(
+    scope: str,
+    content: str,
+    project_id: int | None = None,
+    chat_id: int | None = None
+) -> int:
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        INSERT INTO summaries (scope, project_id, chat_id, content)
+        VALUES (?, ?, ?, ?)
+        """,
+        (scope, project_id, chat_id, content)
+    )
+
+    summary_id = cur.lastrowid
+
+    conn.commit()
+    conn.close()
+
+    return summary_id
+
+
+def get_chat_summaries(chat_id: int):
+    conn = get_connection()
+
+    summaries = conn.execute(
+        """
+        SELECT *
+        FROM summaries
+        WHERE scope = 'chat' AND chat_id = ?
+        ORDER BY created_at DESC
+        """,
+        (chat_id,)
+    ).fetchall()
+
+    conn.close()
+
+    return summaries
+
+
+def get_project_summaries(project_id: int):
+    conn = get_connection()
+
+    summaries = conn.execute(
+        """
+        SELECT *
+        FROM summaries
+        WHERE scope = 'project' AND project_id = ?
+        ORDER BY created_at DESC
+        """,
+        (project_id,)
+    ).fetchall()
+
+    conn.close()
+
+    return summaries
+
+
+def delete_project_ideas(project_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        DELETE FROM project_ideas
+        WHERE project_id = ?
+        """,
+        (project_id,)
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def save_project_ideas(project_id: int, ideas: list[dict]):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    for idea in ideas:
+        cur.execute(
+            """
+            INSERT INTO project_ideas (
+                project_id,
+                title,
+                description,
+                evidence,
+                importance
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                project_id,
+                idea.get("title", ""),
+                idea.get("description", ""),
+                idea.get("evidence", ""),
+                idea.get("importance", "medium")
+            )
+        )
+
+    conn.commit()
+    conn.close()
+
+
+def get_project_ideas(project_id: int):
+    conn = get_connection()
+
+    ideas = conn.execute(
+        """
+        SELECT *
+        FROM project_ideas
+        WHERE project_id = ?
+        ORDER BY created_at DESC
+        """,
+        (project_id,)
+    ).fetchall()
+
+    conn.close()
+
+    return ideas
+
+#---------------------------------------------
+
+#----------------- MINDMAP -------------------
+
+def clear_project_mindmap(project_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        DELETE FROM mindmap_edges
+        WHERE project_id = ?
+        """,
+        (project_id,)
+    )
+
+    cur.execute(
+        """
+        DELETE FROM mindmap_nodes
+        WHERE project_id = ?
+        """,
+        (project_id,)
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def save_project_mindmap(project_id: int, mindmap_data: dict):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    nodes = mindmap_data.get("nodes", [])
+    edges = mindmap_data.get("edges", [])
+
+    for node in nodes:
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO mindmap_nodes (
+                project_id,
+                node_key,
+                label,
+                description,
+                importance
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                project_id,
+                node.get("id", ""),
+                node.get("label", ""),
+                node.get("description", ""),
+                node.get("importance", "medium")
+            )
+        )
+
+    for edge in edges:
+        cur.execute(
+            """
+            INSERT INTO mindmap_edges (
+                project_id,
+                source_key,
+                target_key,
+                relation
+            )
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                project_id,
+                edge.get("source", ""),
+                edge.get("target", ""),
+                edge.get("relation", "")
+            )
+        )
+
+    conn.commit()
+    conn.close()
+
+
+def get_mindmap_nodes(project_id: int):
+    conn = get_connection()
+
+    nodes = conn.execute(
+        """
+        SELECT *
+        FROM mindmap_nodes
+        WHERE project_id = ?
+        ORDER BY created_at ASC
+        """,
+        (project_id,)
+    ).fetchall()
+
+    conn.close()
+
+    return nodes
+
+
+def get_mindmap_edges(project_id: int):
+    conn = get_connection()
+
+    edges = conn.execute(
+        """
+        SELECT *
+        FROM mindmap_edges
+        WHERE project_id = ?
+        ORDER BY created_at ASC
+        """,
+        (project_id,)
+    ).fetchall()
+
+    conn.close()
+
+    return edges
+
+
+def get_mindmap_node_by_key(project_id: int, node_key: str):
+    conn = get_connection()
+
+    node = conn.execute(
+        """
+        SELECT *
+        FROM mindmap_nodes
+        WHERE project_id = ? AND node_key = ?
+        """,
+        (project_id, node_key)
+    ).fetchone()
+
+    conn.close()
+
+    return node
+
+
+def update_summary(summary_id: int, new_content: str):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        UPDATE summaries
+        SET content = ?
+        WHERE id = ?
+        """,
+        (new_content, summary_id)
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def update_project_idea(
+    idea_id: int,
+    title: str,
+    description: str,
+    evidence: str,
+    importance: str
+):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        UPDATE project_ideas
+        SET title = ?,
+            description = ?,
+            evidence = ?,
+            importance = ?
+        WHERE id = ?
+        """,
+        (
+            title,
+            description,
+            evidence,
+            importance,
+            idea_id
+        )
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def delete_project_idea(idea_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        DELETE FROM project_ideas
+        WHERE id = ?
+        """,
+        (idea_id,)
+    )
+
+    conn.commit()
+    conn.close()
+
+#--------------------------------------------
+
+def get_audio_file_paths_by_chat(chat_id: int):
+    conn = get_connection()
+
+    rows = conn.execute(
+        """
+        SELECT file_path
+        FROM audio_records
+        WHERE chat_id = ?
+        """,
+        (chat_id,)
+    ).fetchall()
+
+    conn.close()
+
+    return [row["file_path"] for row in rows]
+
+
+def get_audio_file_paths_by_project(project_id: int):
+    conn = get_connection()
+
+    rows = conn.execute(
+        """
+        SELECT audio_records.file_path
+        FROM audio_records
+        JOIN chats ON audio_records.chat_id = chats.id
+        WHERE chats.project_id = ?
+        """,
+        (project_id,)
+    ).fetchall()
+
+    conn.close()
+
+    return [row["file_path"] for row in rows]
+
+
+def delete_chat(chat_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        DELETE FROM chats
+        WHERE id = ?
+        """,
+        (chat_id,)
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def delete_project(project_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        DELETE FROM projects
+        WHERE id = ?
+        """,
+        (project_id,)
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def delete_summary(summary_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        DELETE FROM summaries
+        WHERE id = ?
+        """,
+        (summary_id,)
+    )
+
+    conn.commit()
+    conn.close()
