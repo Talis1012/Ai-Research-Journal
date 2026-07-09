@@ -3,3 +3,4 @@ python-dotenv
 faster-whisper
 google-genai
 streamlit-agraph
+requests
