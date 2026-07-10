@@ -118,3 +118,38 @@ def search_works(query: str, per_page: int = 10):
         "meta": data.get("meta", {}),
         "results": normalized_results
     }
+
+def search_works_for_queries(queries: list[str], per_page: int = 5):
+    all_results = []
+    seen_keys = set()
+
+    for query in queries:
+        if not query.strip():
+            continue
+
+        data = search_works(
+            query=query.strip(),
+            per_page=per_page
+        )
+
+        results = data.get("results", [])
+
+        for work in results:
+            unique_key = (
+                work.get("doi")
+                or work.get("openalex_id")
+                or work.get("title", "").lower().strip()
+            )
+
+            if not unique_key:
+                continue
+
+            if unique_key in seen_keys:
+                continue
+
+            seen_keys.add(unique_key)
+
+            work["matched_query"] = query.strip()
+            all_results.append(work)
+
+    return all_results
