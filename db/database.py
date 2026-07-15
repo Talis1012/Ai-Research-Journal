@@ -70,6 +70,20 @@ def init_db():
     #type - tipul mesajului, text sau audio_transcript sau ai_summary
 
     cur.execute("""
+        CREATE TABLE IF NOT EXISTS experiment_ai_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            chat_id INTEGER NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (chat_id)
+            REFERENCES chats(id)
+            ON DELETE CASCADE
+        )
+    """)
+
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS audio_records (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             chat_id INTEGER NOT NULL,
@@ -161,6 +175,28 @@ def init_db():
             REFERENCES projects(id)
             ON DELETE CASCADE
         )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS mindmap_source_state (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            source_type TEXT NOT NULL,
+            source_id INTEGER NOT NULL,
+            content_hash TEXT NOT NULL,
+            processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (project_id)
+            REFERENCES projects(id)
+            ON DELETE CASCADE,
+
+            UNIQUE(project_id, source_type, source_id)
+        )
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_mindmap_source_state_project
+        ON mindmap_source_state(project_id)
     """)
 
     conn.commit()
