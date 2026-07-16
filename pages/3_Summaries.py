@@ -149,6 +149,7 @@ with main_col:
                             scope="chat",
                             project_id=selected_project_id,
                             chat_id=selected_chat_id,
+                            summary_style=summary_style,
                             content=summary
                         )
 
@@ -165,7 +166,9 @@ with main_col:
                 st.caption("Nu există rezumate salvate pentru acest chat.")
             else:
                 for summary in saved_chat_summaries:
-                    with st.expander(f"Rezumat generat la {summary['created_at']}"):
+                    with st.expander(
+                        f"{summary['summary_style']} — actualizat la {summary['created_at']}"
+                    ):
                         st.markdown(summary["content"])
 
                         st.divider()
@@ -262,6 +265,7 @@ with main_col:
                         scope="project",
                         project_id=selected_project_id,
                         chat_id=None,
+                        summary_style=project_summary_style,
                         content=summary
                     )
 
@@ -278,7 +282,9 @@ with main_col:
             st.caption("Nu există rezumate salvate pentru acest proiect.")
         else:
             for summary in saved_project_summaries:
-                with st.expander(f"Rezumat generat la {summary['created_at']}"):
+                with st.expander(
+                    f"{summary['summary_style']} — actualizat la {summary['created_at']}"
+                ):
                     st.markdown(summary["content"])
 
                     st.divider()

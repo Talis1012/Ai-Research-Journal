@@ -152,7 +152,7 @@ def mindmap_preview_svg(nodes, edges, max_nodes: int = 9) -> str:
         node_height = 58 if is_center else 48
 
         if is_center:
-            fill, stroke, text_color = "#1769c8", "#0e58ad", "#ffffff"
+            fill, stroke, text_color = "#73b7f3", "#0e58ad", "#111827"
         else:
             fill, stroke, text_color = palette.get(
                 node["importance"],
@@ -301,7 +301,7 @@ def load_css():
         <style>
         :root {
             --app-bg: #ffffff;
-            --topbar-h: 75px;
+            --topbar-h: 62px;
             --panel: #ffffff;
             --panel-soft: #f8fbff;
             --line: #dfe6ef;
@@ -401,20 +401,20 @@ def load_css():
         }
 
         div[data-testid="column"]:has(.top-project-scope) {
-            padding: 21px 18px 0 0 !important;
+            padding: 7px 14px 0 0 !important;
         }
 
         div[data-testid="column"]:has(.top-search-scope) {
-            padding: 45px 20px 0 18px !important;
+            padding: 0 16px 0 12px !important;
         }
 
         div[data-testid="column"]:has(.top-user-scope) {
-            padding: 0 24px 0 0 !important;
+            padding: 0 18px 0 0 !important;
         }
 
         .topbar {
             min-height: var(--topbar-h);
-            padding: 0 24px 0 30px;
+            padding: 0 16px 0 20px;
             background: transparent;
             border-bottom: 0;
             display: flex;
@@ -424,8 +424,8 @@ def load_css():
         .brand-wrap {
             display: flex;
             align-items: center;
-            gap: 15px;
-            min-height: 52px;
+            gap: 10px;
+            min-height: 42px;
         }
 
         .brand-logo {
@@ -436,15 +436,15 @@ def load_css():
         }
 
         .molecule-logo {
-            width: 48px;
-            height: 48px;
+            width: 38px;
+            height: 38px;
             flex: 0 0 auto;
             position: relative;
         }
 
         .molecule-logo .node {
-            width: 7px;
-            height: 7px;
+            width: 6px;
+            height: 6px;
             border-radius: 50%;
             background: #1296bf;
             position: absolute;
@@ -467,32 +467,26 @@ def load_css():
         .molecule-logo .n6 { left: 87%; top: 28%; }
         .molecule-logo .n7 { left: 50%; top: 50%; }
 
-        .molecule-logo .b1 { width: 19px; left: 50%; top: 13%; transform: rotate(90deg); }
-        .molecule-logo .b2 { width: 20px; left: 18%; top: 31%; transform: rotate(30deg); }
-        .molecule-logo .b3 { width: 20px; left: 18%; top: 69%; transform: rotate(-30deg); }
-        .molecule-logo .b4 { width: 19px; left: 50%; top: 87%; transform: rotate(-90deg); }
-        .molecule-logo .b5 { width: 20px; left: 82%; top: 69%; transform: rotate(210deg); }
-        .molecule-logo .b6 { width: 20px; left: 82%; top: 31%; transform: rotate(150deg); }
+        .molecule-logo .b1 { width: 15px; left: 50%; top: 13%; transform: rotate(90deg); }
+        .molecule-logo .b2 { width: 16px; left: 18%; top: 31%; transform: rotate(30deg); }
+        .molecule-logo .b3 { width: 16px; left: 18%; top: 69%; transform: rotate(-30deg); }
+        .molecule-logo .b4 { width: 15px; left: 50%; top: 87%; transform: rotate(-90deg); }
+        .molecule-logo .b5 { width: 16px; left: 82%; top: 69%; transform: rotate(210deg); }
+        .molecule-logo .b6 { width: 16px; left: 82%; top: 31%; transform: rotate(150deg); }
 
         .brand-title {
-            font-size: 1.34rem;
+            font-size: 1.08rem;
             font-weight: 820;
             color: #111827;
-            line-height: 1.08;
-        }
-
-        .brand-subtitle {
-            margin-top: 6px;
-            color: var(--muted);
-            font-size: 0.78rem;
-            font-weight: 620;
+            line-height: 1;
+            white-space: nowrap;
         }
 
         .header-icons {
             display: flex;
             justify-content: flex-end;
             align-items: center;
-            gap: 22px;
+            gap: 16px;
             min-height: var(--topbar-h);
             padding-top: 0;
             color: #526078;
@@ -513,8 +507,8 @@ def load_css():
 
         .icon-help,
         .icon-bell {
-            width: 25px;
-            height: 25px;
+            width: 22px;
+            height: 22px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -525,8 +519,8 @@ def load_css():
         .icon-help::before,
         .icon-bell::before {
             content: "";
-            width: 23px;
-            height: 23px;
+            width: 20px;
+            height: 20px;
             background: currentColor;
             opacity: 0.92;
         }
@@ -545,12 +539,12 @@ def load_css():
             position: absolute;
             right: -6px;
             top: -7px;
-            min-width: 17px;
-            height: 17px;
+            min-width: 15px;
+            height: 15px;
             border-radius: 999px;
             background: #0ea5d5;
             color: #ffffff;
-            font-size: 0.64rem;
+            font-size: 0.58rem;
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -560,16 +554,16 @@ def load_css():
         .user-chip {
             display: inline-flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             color: #111827;
-            font-size: 0.92rem;
+            font-size: 0.82rem;
             font-weight: 800;
             white-space: nowrap;
         }
 
         .avatar-photo {
-            width: 42px;
-            height: 42px;
+            width: 34px;
+            height: 34px;
             border-radius: 999px;
             display: inline-flex;
             align-items: center;
@@ -583,20 +577,20 @@ def load_css():
 
         div[data-testid="column"]:has(.top-project-scope) label {
             color: #667085 !important;
-            font-size: 0.78rem !important;
+            font-size: 0.68rem !important;
             font-weight: 760 !important;
             line-height: 1.05 !important;
-            margin-bottom: 5px !important;
+            margin-bottom: 3px !important;
         }
 
         div[data-testid="column"]:has(.top-project-scope) div[data-baseweb="select"] > div {
-            min-height: 52px !important;
-            height: 52px !important;
+            min-height: 40px !important;
+            height: 40px !important;
             border: 1px solid #d8e1ed !important;
             border-radius: 8px !important;
             background: #ffffff !important;
             box-shadow: none !important;
-            font-size: 0.9rem !important;
+            font-size: 0.82rem !important;
             font-weight: 800 !important;
         }
 
@@ -609,18 +603,18 @@ def load_css():
 
         div[class*="st-key-project_global_search"] {
             position: relative;
-            margin-top: 27px !important;
+            margin-top: 10px !important;
         }
 
         div[class*="st-key-project_global_search"]::before {
             content: "";
             position: absolute;
-            left: 18px;
+            left: 15px;
             top: 50%;
             transform: translateY(-50%);
             z-index: 2;
-            width: 20px;
-            height: 20px;
+            width: 17px;
+            height: 17px;
             background: #566276;
             mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") center / contain no-repeat;
             -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") center / contain no-repeat;
@@ -629,16 +623,16 @@ def load_css():
         div[class*="st-key-project_global_search"]::after {
             content: "⌘K";
             position: absolute;
-            right: 14px;
+            right: 11px;
             top: 50%;
             transform: translateY(-50%);
             z-index: 2;
-            height: 24px;
-            min-width: 34px;
+            height: 21px;
+            min-width: 31px;
             border-radius: 6px;
             background: #f1f4f8;
             color: #667085;
-            font-size: 0.72rem;
+            font-size: 0.66rem;
             font-weight: 850;
             display: inline-flex;
             align-items: center;
@@ -646,8 +640,8 @@ def load_css():
         }
 
         div[class*="st-key-project_global_search"] div[data-baseweb="input"] {
-            min-height: 52px !important;
-            height: 52px !important;
+            min-height: 42px !important;
+            height: 42px !important;
             border: 1px solid #d8e1ed !important;
             border-radius: 8px !important;
             overflow: hidden !important;
@@ -656,22 +650,22 @@ def load_css():
         }
 
         div[class*="st-key-project_global_search"] div[data-baseweb="base-input"] {
-            min-height: 50px !important;
-            height: 50px !important;
+            min-height: 40px !important;
+            height: 40px !important;
             border: 0 !important;
             background: transparent !important;
             box-shadow: none !important;
         }
 
         div[class*="st-key-project_global_search"] input {
-            min-height: 50px !important;
-            height: 50px !important;
+            min-height: 40px !important;
+            height: 40px !important;
             border: 0 !important;
             border-radius: 0 !important;
-            padding-left: 54px !important;
-            padding-right: 60px !important;
+            padding-left: 44px !important;
+            padding-right: 52px !important;
             box-shadow: none !important;
-            font-size: 0.9rem !important;
+            font-size: 0.82rem !important;
             font-weight: 600 !important;
             background: transparent !important;
         }
@@ -1592,10 +1586,7 @@ def top_brand():
         <div class="topbar">
             <div class="brand-wrap">
                 {brand_logo_svg()}
-                <div>
-                    <div class="brand-title">Research Journal AI</div>
-                    <div class="brand-subtitle">Your AI Research Assistant</div>
-                </div>
+                <div class="brand-title">Research Journal AI</div>
             </div>
         </div>
         """
@@ -1621,13 +1612,18 @@ def user_chip(name: str = "Dr. Alex Morgan"):
     )
 
 
-def sidebar_nav(active_page: str = "experiment_chat"):
+def sidebar_nav(active_page: str = "experiments"):
+    active_aliases = {
+        "projects": "experiments",
+        "experiment_chat": "experiments",
+        "summaries": "experiments",
+        "mindmap": "experiments",
+        "bibliography": "library",
+    }
+    active_page = active_aliases.get(active_page, active_page)
     items = [
-        ("projects", "/Projects", "□", "Projects"),
-        ("experiment_chat", "/Experiment_Chat", "◉", "Experiment Chat"),
-        ("summaries", "/Summaries", "✧", "AI Summaries"),
-        ("mindmap", "/Mindmap", "⌘", "Mindmap"),
-        ("bibliography", "/Bibliography_Search", "▱", "Bibliography Search"),
+        ("experiments", "/Experiments", "🧪", "Experiments"),
+        ("library", "/Bibliography_Search", "📚", "Library"),
     ]
 
     nav_html = "\n".join(
@@ -1643,7 +1639,9 @@ def sidebar_nav(active_page: str = "experiment_chat"):
         f"""
         <div class="left-rail">
             {nav_html}
-
+            <span class="nav-item" style="cursor:default;">
+                <span class="nav-icon">✎</span><span>Paper Writing</span>
+            </span>
         </div>
         """
     )

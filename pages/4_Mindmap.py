@@ -181,11 +181,11 @@ with main_col:
                 title=node["description"] or "",
                 size=size,
                 font={
-                "size": 18,
-                "face": "Arial",
-                "color": "#ffffff",
+                "size": 19,
+                "face": "Inter",
+                "color": "#111827",
                 "strokeWidth": 3,
-                "strokeColor": "#000000"
+                "strokeColor": "#ffffff"
                 }
             )
         )

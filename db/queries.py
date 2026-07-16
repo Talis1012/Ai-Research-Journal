@@ -353,20 +353,100 @@ def save_summary(
     scope: str,
     content: str,
     project_id: int | None = None,
-    chat_id: int | None = None
+    chat_id: int | None = None,
+    summary_style: str = "Standard cercetare",
 ) -> int:
+    if scope not in {"project", "chat"}:
+        raise ValueError("Summary scope must be 'project' or 'chat'.")
+
+    if scope == "project" and project_id is None:
+        raise ValueError("project_id is required for a project summary.")
+
+    if scope == "chat" and chat_id is None:
+        raise ValueError("chat_id is required for an experiment summary.")
+
+    summary_style = summary_style.strip() or "Standard cercetare"
     conn = get_connection()
     cur = conn.cursor()
 
-    cur.execute(
-        """
-        INSERT INTO summaries (scope, project_id, chat_id, content)
-        VALUES (?, ?, ?, ?)
-        """,
-        (scope, project_id, chat_id, content)
-    )
+    if scope == "project":
+        existing = cur.execute(
+            """
+            SELECT id
+            FROM summaries
+            WHERE scope = 'project'
+              AND project_id = ?
+              AND summary_style = ?
+            """,
+            (project_id, summary_style),
+        ).fetchone()
 
-    summary_id = cur.lastrowid
+        if existing:
+            summary_id = existing["id"]
+            cur.execute(
+                """
+                UPDATE summaries
+                SET content = ?,
+                    chat_id = NULL,
+                    created_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (content, summary_id),
+            )
+        else:
+            cur.execute(
+                """
+                INSERT INTO summaries (
+                    scope,
+                    project_id,
+                    chat_id,
+                    summary_style,
+                    content
+                )
+                VALUES ('project', ?, NULL, ?, ?)
+                """,
+                (project_id, summary_style, content),
+            )
+            summary_id = cur.lastrowid
+    else:
+        existing = cur.execute(
+            """
+            SELECT id
+            FROM summaries
+            WHERE scope = 'chat'
+              AND chat_id = ?
+              AND summary_style = ?
+            """,
+            (chat_id, summary_style),
+        ).fetchone()
+
+        if existing:
+            summary_id = existing["id"]
+            cur.execute(
+                """
+                UPDATE summaries
+                SET content = ?,
+                    project_id = ?,
+                    created_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (content, project_id, summary_id),
+            )
+        else:
+            cur.execute(
+                """
+                INSERT INTO summaries (
+                    scope,
+                    project_id,
+                    chat_id,
+                    summary_style,
+                    content
+                )
+                VALUES ('chat', ?, ?, ?, ?)
+                """,
+                (project_id, chat_id, summary_style, content),
+            )
+            summary_id = cur.lastrowid
 
     conn.commit()
     conn.close()
@@ -374,17 +454,23 @@ def save_summary(
     return summary_id
 
 
-def get_chat_summaries(chat_id: int):
+def get_chat_summaries(chat_id: int, summary_style: str | None = None):
     conn = get_connection()
+    params = [chat_id]
+    style_filter = ""
+
+    if summary_style is not None:
+        style_filter = " AND summary_style = ?"
+        params.append(summary_style)
 
     summaries = conn.execute(
-        """
+        f"""
         SELECT *
         FROM summaries
-        WHERE scope = 'chat' AND chat_id = ?
-        ORDER BY created_at DESC
+        WHERE scope = 'chat' AND chat_id = ?{style_filter}
+        ORDER BY created_at DESC, id DESC
         """,
-        (chat_id,)
+        params,
     ).fetchall()
 
     conn.close()
@@ -392,22 +478,64 @@ def get_chat_summaries(chat_id: int):
     return summaries
 
 
-def get_project_summaries(project_id: int):
+def get_chat_summary(chat_id: int, summary_style: str):
     conn = get_connection()
-
-    summaries = conn.execute(
+    summary = conn.execute(
         """
         SELECT *
         FROM summaries
-        WHERE scope = 'project' AND project_id = ?
-        ORDER BY created_at DESC
+        WHERE scope = 'chat'
+          AND chat_id = ?
+          AND summary_style = ?
+        LIMIT 1
         """,
-        (project_id,)
+        (chat_id, summary_style),
+    ).fetchone()
+    conn.close()
+
+    return summary
+
+
+def get_project_summaries(project_id: int, summary_style: str | None = None):
+    conn = get_connection()
+    params = [project_id]
+    style_filter = ""
+
+    if summary_style is not None:
+        style_filter = " AND summary_style = ?"
+        params.append(summary_style)
+
+    summaries = conn.execute(
+        f"""
+        SELECT *
+        FROM summaries
+        WHERE scope = 'project' AND project_id = ?{style_filter}
+        ORDER BY created_at DESC, id DESC
+        """,
+        params,
     ).fetchall()
 
     conn.close()
 
     return summaries
+
+
+def get_project_summary(project_id: int, summary_style: str):
+    conn = get_connection()
+    summary = conn.execute(
+        """
+        SELECT *
+        FROM summaries
+        WHERE scope = 'project'
+          AND project_id = ?
+          AND summary_style = ?
+        LIMIT 1
+        """,
+        (project_id, summary_style),
+    ).fetchone()
+    conn.close()
+
+    return summary
 
 
 def delete_project_ideas(project_id: int):

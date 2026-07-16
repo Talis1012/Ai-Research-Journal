@@ -114,6 +114,7 @@ def init_db():
             scope TEXT NOT NULL,
             project_id INTEGER,
             chat_id INTEGER,
+            summary_style TEXT NOT NULL DEFAULT 'Standard cercetare',
             content TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
@@ -126,6 +127,59 @@ def init_db():
             ON DELETE CASCADE
         )
     """)
+
+    summary_columns = cur.execute("PRAGMA table_info(summaries)").fetchall()
+    summary_column_names = [column["name"] for column in summary_columns]
+
+    if "summary_style" not in summary_column_names:
+        cur.execute(
+            """
+            ALTER TABLE summaries
+            ADD COLUMN summary_style TEXT NOT NULL DEFAULT 'Standard cercetare'
+            """
+        )
+
+    # Rezumatele create înainte de introducerea structurii sunt considerate
+    # rezumate standard. Dacă există duplicate istorice, păstrăm versiunea
+    # cea mai nouă înainte de a activa unicitatea per structură.
+    cur.execute(
+        """
+        DELETE FROM summaries
+        WHERE scope = 'project'
+          AND id NOT IN (
+              SELECT MAX(id)
+              FROM summaries
+              WHERE scope = 'project'
+              GROUP BY project_id, summary_style
+          )
+        """
+    )
+    cur.execute(
+        """
+        DELETE FROM summaries
+        WHERE scope = 'chat'
+          AND id NOT IN (
+              SELECT MAX(id)
+              FROM summaries
+              WHERE scope = 'chat'
+              GROUP BY chat_id, summary_style
+          )
+        """
+    )
+    cur.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_summaries_project_style
+        ON summaries(project_id, summary_style)
+        WHERE scope = 'project'
+        """
+    )
+    cur.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_summaries_chat_style
+        ON summaries(chat_id, summary_style)
+        WHERE scope = 'chat'
+        """
+    )
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS project_ideas (

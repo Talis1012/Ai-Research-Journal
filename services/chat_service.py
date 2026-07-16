@@ -2,6 +2,110 @@ from ai.factory import get_ai_provider
 from services.summary_service import format_messages_for_ai
 
 
+def _format_rows_for_project_ai(rows, fields: tuple[str, ...]) -> str:
+    formatted = []
+
+    for row in rows or []:
+        values = []
+
+        for field in fields:
+            try:
+                value = row[field]
+            except (KeyError, TypeError, IndexError):
+                value = ""
+
+            if value:
+                values.append(f"{field}: {value}")
+
+        if values:
+            formatted.append("\n".join(values))
+
+    return "\n---\n".join(formatted)
+
+
+def answer_question_about_project(
+    project_name: str,
+    project_domain: str,
+    messages,
+    summaries,
+    ideas,
+    mindmap_nodes,
+    mindmap_edges,
+    user_question: str,
+    chat_history: list[dict] | None = None,
+) -> str:
+    ai = get_ai_provider()
+    notes_text = format_messages_for_ai(messages)
+    summaries_text = _format_rows_for_project_ai(
+        summaries,
+        ("scope", "content", "created_at"),
+    )
+    ideas_text = _format_rows_for_project_ai(
+        ideas,
+        ("title", "description", "evidence", "importance"),
+    )
+    nodes_text = _format_rows_for_project_ai(
+        mindmap_nodes,
+        ("node_key", "label", "description", "importance"),
+    )
+    edges_text = _format_rows_for_project_ai(
+        mindmap_edges,
+        ("source_key", "target_key", "relation"),
+    )
+    history_text = ""
+
+    if chat_history:
+        history_text = "\n".join(
+            f"{message.get('role', 'user')}: {message.get('content', '')}"
+            for message in chat_history[-12:]
+        )
+
+    prompt = f"""
+Ești Research Journal AI, un asistent care ajută cercetătorul să înțeleagă
+întregul proiect, nu doar un singur experiment.
+
+Proiect:
+{project_name}
+
+Domeniu:
+{project_domain}
+
+Notițe și transcrieri din toate experimentele:
+{notes_text or "Nu există notițe."}
+
+Rezumate salvate pentru proiect și experimente:
+{summaries_text or "Nu există rezumate salvate."}
+
+Idei principale:
+{ideas_text or "Nu există idei principale salvate."}
+
+Noduri mind map:
+{nodes_text or "Nu există noduri în mind map."}
+
+Relații mind map:
+{edges_text or "Nu există relații în mind map."}
+
+Istoric conversație:
+{history_text or "Nu există istoric."}
+
+Întrebarea utilizatorului:
+{user_question}
+
+Răspunde în limba română.
+
+Reguli stricte:
+- Folosește numai datele proiectului furnizate mai sus.
+- Poți sintetiza informații între experimente și poți identifica tipare sau goluri.
+- Separă clar informațiile observate de inferențele prudente.
+- Dacă datele nu susțin răspunsul, spune explicit ce informații lipsesc.
+- Nu inventa rezultate, valori, surse, compuși sau concluzii.
+- Nu oferi proceduri periculoase sau pași operaționali riscanți.
+- Fii clar, structurat și util pentru un cercetător.
+"""
+
+    return ai.generate_text(prompt)
+
+
 def answer_question_about_experiment(
     project_name: str,
     chat_title: str,

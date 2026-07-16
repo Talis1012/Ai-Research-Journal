@@ -7,4 +7,4 @@ st.set_page_config(
     layout="wide",
 )
 
-st.switch_page("pages/1_Projects.py")
+st.switch_page("pages/1_Experiments.py")

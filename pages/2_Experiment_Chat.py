@@ -775,7 +775,7 @@ with insight_col:
             title="Chat Summary",
             value=str(ai_response_count),
             subtitle="AI responses",
-            icon="▣",
+            icon="🗂️",
             tone="blue",
             updated=f"Last updated {latest_update}",
         )
@@ -785,7 +785,7 @@ with insight_col:
             title="Project Summary",
             value=str(len(chats)),
             subtitle="Experiments",
-            icon="▥",
+            icon="🗃️",
             tone="green",
             updated=f"Last note {latest_project_update}",
         )
@@ -795,7 +795,7 @@ with insight_col:
             title="Key Ideas",
             value=str(len(project_ideas)),
             subtitle="Insights",
-            icon="♙",
+            icon="🔑",
             tone="purple",
             updated=f"Last updated {latest_ideas_update}",
         )
