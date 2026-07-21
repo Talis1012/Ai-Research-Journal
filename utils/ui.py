@@ -1623,7 +1623,7 @@ def sidebar_nav(active_page: str = "experiments"):
     active_page = active_aliases.get(active_page, active_page)
     items = [
         ("experiments", "/Experiments", "🧪", "Experiments"),
-        ("library", "/Bibliography_Search", "📚", "Library"),
+        ("library", "/Library", "📚", "Library"),
     ]
 
     nav_html = "\n".join(

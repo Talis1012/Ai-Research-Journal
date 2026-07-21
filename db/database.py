@@ -253,5 +253,265 @@ def init_db():
         ON mindmap_source_state(project_id)
     """)
 
+    # =========================
+    # RESEARCH LIBRARY
+    # =========================
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS library_folders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            parent_id INTEGER,
+            name TEXT NOT NULL COLLATE NOCASE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (parent_id)
+            REFERENCES library_folders(id)
+            ON DELETE CASCADE
+        )
+    """)
+
+    cur.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_library_folders_root_name
+        ON library_folders(name)
+        WHERE parent_id IS NULL
+    """)
+
+    cur.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_library_folders_parent_name
+        ON library_folders(parent_id, name)
+        WHERE parent_id IS NOT NULL
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS library_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            folder_id INTEGER,
+            item_type TEXT NOT NULL DEFAULT 'paper',
+            title TEXT NOT NULL,
+            authors TEXT,
+            publication_year INTEGER,
+            source_name TEXT,
+            doi TEXT COLLATE NOCASE,
+            openalex_id TEXT COLLATE NOCASE,
+            url TEXT,
+            abstract TEXT,
+            original_filename TEXT,
+            file_path TEXT,
+            mime_type TEXT,
+            file_size INTEGER,
+            status TEXT NOT NULL DEFAULT 'To read',
+            personal_notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (folder_id)
+            REFERENCES library_folders(id)
+            ON DELETE SET NULL
+        )
+    """)
+
+    cur.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_library_items_doi
+        ON library_items(doi)
+        WHERE doi IS NOT NULL AND doi != ''
+    """)
+
+    cur.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_library_items_openalex
+        ON library_items(openalex_id)
+        WHERE openalex_id IS NOT NULL AND openalex_id != ''
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_library_items_folder
+        ON library_items(folder_id)
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS library_tags (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS library_item_tags (
+            item_id INTEGER NOT NULL,
+            tag_id INTEGER NOT NULL,
+
+            PRIMARY KEY (item_id, tag_id),
+
+            FOREIGN KEY (item_id)
+            REFERENCES library_items(id)
+            ON DELETE CASCADE,
+
+            FOREIGN KEY (tag_id)
+            REFERENCES library_tags(id)
+            ON DELETE CASCADE
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS library_item_projects (
+            item_id INTEGER NOT NULL,
+            project_id INTEGER NOT NULL,
+
+            PRIMARY KEY (item_id, project_id),
+
+            FOREIGN KEY (item_id)
+            REFERENCES library_items(id)
+            ON DELETE CASCADE,
+
+            FOREIGN KEY (project_id)
+            REFERENCES projects(id)
+            ON DELETE CASCADE
+        )
+    """)
+
+    # =========================
+    # PROJECT PAPER DISCOVERY
+    # =========================
+
+    # Manual Search and AI Recommendations each keep one independent current
+    # result set per project.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS project_discovery_sets (
+            project_id INTEGER NOT NULL,
+            source_mode TEXT NOT NULL,
+            profile_json TEXT NOT NULL DEFAULT '{}',
+            queries_json TEXT NOT NULL DEFAULT '[]',
+            search_options_json TEXT NOT NULL DEFAULT '{}',
+            ai_error TEXT,
+            result_count INTEGER NOT NULL DEFAULT 0,
+            openalex_page INTEGER NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            PRIMARY KEY (project_id, source_mode),
+
+            FOREIGN KEY (project_id)
+            REFERENCES projects(id)
+            ON DELETE CASCADE,
+
+            CHECK (source_mode IN ('Manual Search', 'AI Recommendations'))
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS project_discovery_set_papers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            source_mode TEXT NOT NULL,
+            ranking_id TEXT NOT NULL,
+            rank_position INTEGER NOT NULL,
+            openalex_id TEXT COLLATE NOCASE,
+            doi TEXT COLLATE NOCASE,
+            title TEXT NOT NULL,
+            final_score REAL,
+            paper_json TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (project_id, source_mode)
+            REFERENCES project_discovery_sets(project_id, source_mode)
+            ON DELETE CASCADE,
+
+            UNIQUE(project_id, source_mode, ranking_id),
+            UNIQUE(project_id, source_mode, rank_position)
+        )
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_project_discovery_set_papers_project
+        ON project_discovery_set_papers(project_id, source_mode, rank_position)
+    """)
+
+    cur.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_project_discovery_set_papers_openalex
+        ON project_discovery_set_papers(project_id, source_mode, openalex_id)
+        WHERE openalex_id IS NOT NULL AND openalex_id != ''
+    """)
+
+    # Migrate result sets created by the earlier one-set-per-project schema.
+    legacy_runs = cur.execute(
+        """
+        SELECT name
+        FROM sqlite_master
+        WHERE type = 'table' AND name = 'project_discovery_runs'
+        """
+    ).fetchone()
+    legacy_papers = cur.execute(
+        """
+        SELECT name
+        FROM sqlite_master
+        WHERE type = 'table' AND name = 'project_discovery_papers'
+        """
+    ).fetchone()
+
+    if legacy_runs:
+        cur.execute("""
+            INSERT OR IGNORE INTO project_discovery_sets (
+                project_id,
+                source_mode,
+                profile_json,
+                queries_json,
+                search_options_json,
+                ai_error,
+                result_count,
+                openalex_page,
+                created_at,
+                updated_at
+            )
+            SELECT
+                project_id,
+                CASE
+                    WHEN source_mode = 'Manual Search' THEN 'Manual Search'
+                    ELSE 'AI Recommendations'
+                END,
+                profile_json,
+                queries_json,
+                search_options_json,
+                ai_error,
+                result_count,
+                openalex_page,
+                created_at,
+                updated_at
+            FROM project_discovery_runs
+        """)
+
+    if legacy_runs and legacy_papers:
+        cur.execute("""
+            INSERT OR IGNORE INTO project_discovery_set_papers (
+                project_id,
+                source_mode,
+                ranking_id,
+                rank_position,
+                openalex_id,
+                doi,
+                title,
+                final_score,
+                paper_json,
+                created_at
+            )
+            SELECT
+                paper.project_id,
+                CASE
+                    WHEN run.source_mode = 'Manual Search' THEN 'Manual Search'
+                    ELSE 'AI Recommendations'
+                END,
+                paper.ranking_id,
+                paper.rank_position,
+                paper.openalex_id,
+                paper.doi,
+                paper.title,
+                paper.final_score,
+                paper.paper_json,
+                paper.created_at
+            FROM project_discovery_papers paper
+            JOIN project_discovery_runs run
+              ON run.project_id = paper.project_id
+        """)
+
     conn.commit()
     conn.close()
