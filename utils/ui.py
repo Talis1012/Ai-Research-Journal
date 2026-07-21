@@ -1624,6 +1624,7 @@ def sidebar_nav(active_page: str = "experiments"):
     items = [
         ("experiments", "/Experiments", "🧪", "Experiments"),
         ("library", "/Library", "📚", "Library"),
+        ("paper_writing", "/Paper_Writing", "✎", "Paper Writing"),
     ]
 
     nav_html = "\n".join(
@@ -1639,9 +1640,6 @@ def sidebar_nav(active_page: str = "experiments"):
         f"""
         <div class="left-rail">
             {nav_html}
-            <span class="nav-item" style="cursor:default;">
-                <span class="nav-icon">✎</span><span>Paper Writing</span>
-            </span>
         </div>
         """
     )

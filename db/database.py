@@ -513,5 +513,170 @@ def init_db():
               ON run.project_id = paper.project_id
         """)
 
+    # =========================
+    # PAPER WRITING
+    # =========================
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS manuscripts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'Draft',
+            citation_style TEXT NOT NULL DEFAULT 'APA 7',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (project_id)
+            REFERENCES projects(id)
+            ON DELETE CASCADE,
+
+            CHECK (status IN ('Draft', 'In review', 'Final')),
+            CHECK (citation_style IN ('APA 7', 'Vancouver'))
+        )
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_manuscripts_project
+        ON manuscripts(project_id, updated_at DESC)
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS manuscript_sections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            manuscript_id INTEGER NOT NULL,
+            parent_section_id INTEGER,
+            section_type TEXT NOT NULL DEFAULT 'custom',
+            title TEXT NOT NULL,
+            content_md TEXT NOT NULL DEFAULT '',
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (manuscript_id)
+            REFERENCES manuscripts(id)
+            ON DELETE CASCADE,
+
+            FOREIGN KEY (parent_section_id)
+            REFERENCES manuscript_sections(id)
+            ON DELETE SET NULL
+        )
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_manuscript_sections_order
+        ON manuscript_sections(manuscript_id, sort_order, id)
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS manuscript_sources (
+            manuscript_id INTEGER NOT NULL,
+            library_item_id INTEGER NOT NULL,
+            citation_key TEXT NOT NULL COLLATE NOCASE,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            PRIMARY KEY (manuscript_id, library_item_id),
+            UNIQUE (manuscript_id, citation_key),
+
+            FOREIGN KEY (manuscript_id)
+            REFERENCES manuscripts(id)
+            ON DELETE CASCADE,
+
+            FOREIGN KEY (library_item_id)
+            REFERENCES library_items(id)
+            ON DELETE CASCADE
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS manuscript_evidence (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            manuscript_id INTEGER NOT NULL,
+            evidence_type TEXT NOT NULL,
+            evidence_id INTEGER NOT NULL,
+            label TEXT NOT NULL,
+            excerpt TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (manuscript_id)
+            REFERENCES manuscripts(id)
+            ON DELETE CASCADE,
+
+            UNIQUE (manuscript_id, evidence_type, evidence_id),
+            CHECK (evidence_type IN ('experiment', 'summary', 'key_idea'))
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS manuscript_citations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            manuscript_id INTEGER NOT NULL,
+            section_id INTEGER NOT NULL,
+            library_item_id INTEGER NOT NULL,
+            citation_key TEXT NOT NULL COLLATE NOCASE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (manuscript_id)
+            REFERENCES manuscripts(id)
+            ON DELETE CASCADE,
+
+            FOREIGN KEY (section_id)
+            REFERENCES manuscript_sections(id)
+            ON DELETE CASCADE,
+
+            FOREIGN KEY (manuscript_id, library_item_id)
+            REFERENCES manuscript_sources(manuscript_id, library_item_id)
+            ON DELETE CASCADE,
+
+            UNIQUE (section_id, library_item_id)
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS manuscript_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            manuscript_id INTEGER NOT NULL,
+            label TEXT NOT NULL,
+            trigger_type TEXT NOT NULL DEFAULT 'manual',
+            note TEXT,
+            snapshot_json TEXT NOT NULL,
+            word_count INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (manuscript_id)
+            REFERENCES manuscripts(id)
+            ON DELETE CASCADE
+        )
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_manuscript_versions_created
+        ON manuscript_versions(manuscript_id, created_at DESC, id DESC)
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS manuscript_ai_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            manuscript_id INTEGER NOT NULL,
+            section_id INTEGER,
+            role TEXT NOT NULL,
+            mode TEXT NOT NULL,
+            content TEXT NOT NULL,
+            payload_json TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (manuscript_id)
+            REFERENCES manuscripts(id)
+            ON DELETE CASCADE,
+
+            FOREIGN KEY (section_id)
+            REFERENCES manuscript_sections(id)
+            ON DELETE SET NULL,
+
+            CHECK (role IN ('user', 'assistant'))
+        )
+    """)
+
     conn.commit()
     conn.close()
