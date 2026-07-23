@@ -656,6 +656,46 @@ def init_db():
     """)
 
     cur.execute("""
+        CREATE TABLE IF NOT EXISTS manuscript_version_comments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            version_id INTEGER NOT NULL,
+            author_name TEXT NOT NULL DEFAULT 'Researcher',
+            content TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (version_id)
+            REFERENCES manuscript_versions(id)
+            ON DELETE CASCADE
+        )
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_manuscript_version_comments
+        ON manuscript_version_comments(version_id, created_at, id)
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS manuscript_submission_profiles (
+            manuscript_id INTEGER PRIMARY KEY,
+            target_journal TEXT,
+            journal_template TEXT NOT NULL DEFAULT 'General IMRaD',
+            short_title TEXT,
+            authors_json TEXT NOT NULL DEFAULT '[]',
+            affiliations_json TEXT NOT NULL DEFAULT '[]',
+            corresponding_author_json TEXT NOT NULL DEFAULT '{}',
+            keywords_json TEXT NOT NULL DEFAULT '[]',
+            word_limit INTEGER NOT NULL DEFAULT 5000,
+            abstract_word_limit INTEGER NOT NULL DEFAULT 250,
+            checklist_json TEXT NOT NULL DEFAULT '{}',
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (manuscript_id)
+            REFERENCES manuscripts(id)
+            ON DELETE CASCADE
+        )
+    """)
+
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS manuscript_ai_messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             manuscript_id INTEGER NOT NULL,

@@ -12,6 +12,7 @@ from db.writing_queries import (
     AI_CONTEXT_MODES,
     CITATION_STYLES,
     MANUSCRIPT_STATUSES,
+    add_manuscript_version_comment,
     add_manuscript_ai_message,
     add_manuscript_section,
     attach_manuscript_evidence,
@@ -34,7 +35,9 @@ from db.writing_queries import (
     get_manuscript_section,
     get_manuscript_sections,
     get_manuscript_sources,
+    get_manuscript_submission_profile,
     get_manuscript_version,
+    get_manuscript_version_comments,
     get_manuscript_versions,
     get_manuscripts,
     get_project_evidence_candidates,
@@ -45,12 +48,15 @@ from db.writing_queries import (
     manuscript_word_count,
     move_manuscript_section,
     restore_manuscript_version,
+    restore_manuscript_section_from_version,
     snapshot_to_text,
     update_manuscript,
     update_manuscript_asset,
     update_manuscript_ai_context,
     update_manuscript_section,
     update_manuscript_source,
+    update_manuscript_submission_profile,
+    update_manuscript_version,
     validate_section_citations,
 )
 from services.manuscript_export_service import (
@@ -67,6 +73,13 @@ from services.manuscript_asset_service import (
     save_figure_upload,
 )
 from services.writing_service import WRITING_MODES, generate_writing_suggestion
+from services.manuscript_review_service import (
+    JOURNAL_TEMPLATES,
+    publication_readiness,
+    run_manuscript_checks,
+    template_rules,
+)
+from utils.markdown_toolbar import render_markdown_toolbar
 from utils.ui import (
     compact_date,
     header_icons,
@@ -123,6 +136,23 @@ def render_page_css():
         .writing-subtitle { color:#667085; font-size:.9rem; margin-top:7px; }
         .writing-panel-title { color:#101828; font-size:1rem; font-weight:850; }
         .writing-panel-caption { color:#667085; font-size:.76rem; line-height:1.4; margin-top:3px; }
+        .writing-editor-label {
+            color:#101828; font-size:.86rem; font-weight:760; margin:2px 0 -4px;
+        }
+
+        div[class*="st-key-writing_section_content_"] {
+            margin-top:-.62rem;
+        }
+
+        div[class*="st-key-writing_section_content_"] div[data-baseweb="textarea"] {
+            border-radius:0 0 9px 9px !important;
+        }
+
+        div[class*="st-key-writing_section_content_"] textarea {
+            font-family:Arial, sans-serif !important;
+            font-size:.91rem !important;
+            line-height:1.65 !important;
+        }
 
         div[data-testid="stColumn"]:has(.writing-outline-scope),
         div[data-testid="stColumn"]:has(.writing-editor-scope),
@@ -233,6 +263,35 @@ def render_page_css():
             white-space:pre-wrap;
         }
 
+        .writing-check-summary {
+            display:flex; align-items:center; justify-content:space-between; gap:12px;
+            border:1px solid #cfe0f6; background:#f6faff; border-radius:9px;
+            padding:11px 13px; color:#344054; font-size:.78rem;
+        }
+        .writing-check-score { color:#0d65d9; font-size:1.1rem; font-weight:880; }
+        .writing-check-card {
+            border:1px solid #e1e8f0; border-left:4px solid #f79009;
+            border-radius:8px; background:#fff; padding:10px 12px; margin:7px 0;
+            color:#475467; font-size:.76rem; line-height:1.46;
+        }
+        .writing-check-card.error { border-left-color:#d92d20; }
+        .writing-check-card.info { border-left-color:#1473e6; }
+        .writing-check-card strong { display:block; color:#101828; font-size:.8rem; margin-bottom:3px; }
+        .writing-check-suggestion { color:#1769d2; margin-top:4px; }
+        .writing-ready-grid {
+            display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px;
+            margin-top:8px;
+        }
+        .writing-ready-item {
+            border:1px solid #e1e8f0; border-radius:7px; padding:8px 10px;
+            color:#475467; font-size:.72rem; background:#fff;
+        }
+        .writing-ready-item.done { border-color:#abefc6; background:#ecfdf3; color:#067647; }
+        .writing-version-comment {
+            border-left:3px solid #b2ccff; padding-left:9px; color:#475467;
+            font-size:.75rem; line-height:1.45;
+        }
+
         @media (max-width: 1050px) {
             div[data-testid="stHorizontalBlock"]:has(.writing-outline-scope) { flex-direction:column; }
             div[data-testid="stColumn"]:has(.writing-outline-scope),
@@ -241,6 +300,7 @@ def render_page_css():
                 width:100% !important; flex:1 1 100% !important; border:1px solid #dfe6ef;
                 border-radius:9px; min-height:auto; position:static; max-height:none;
             }
+            .writing-ready-grid { grid-template-columns:1fr; }
         }
         </style>
         """
@@ -453,7 +513,7 @@ def _render_create_manuscript(project_id: int, key: str):
             st.error(str(exc))
 
 
-def _export_fingerprint(manuscript, sections, sources, assets) -> str:
+def _export_fingerprint(manuscript, sections, sources, assets, submission_profile) -> str:
     payload = (
         tuple((key, manuscript[key]) for key in ("id", "title", "citation_style", "updated_at")),
         [
@@ -482,14 +542,21 @@ def _export_fingerprint(manuscript, sections, sources, assets) -> str:
             )
             for asset in assets
         ],
+        repr(submission_profile or {}),
     )
     return hashlib.sha256(repr(payload).encode("utf-8")).hexdigest()
 
 
-def _render_export_popover(manuscript, sections, sources, assets):
+def _render_export_popover(manuscript, sections, sources, assets, submission_profile):
     safe_filename = re.sub(r"[^A-Za-z0-9._-]+", "_", manuscript["title"]).strip("_")
     safe_filename = safe_filename or "manuscript"
-    fingerprint = _export_fingerprint(manuscript, sections, sources, assets)
+    fingerprint = _export_fingerprint(
+        manuscript,
+        sections,
+        sources,
+        assets,
+        submission_profile,
+    )
     markdown_data = manuscript_markdown(
         manuscript,
         sections,
@@ -498,7 +565,7 @@ def _render_export_popover(manuscript, sections, sources, assets):
     ).encode("utf-8")
 
     with st.popover("↓ Export", width="stretch"):
-        st.caption("A version snapshot is created when an export is downloaded.")
+        st.caption("Exports use the saved publication profile. A version snapshot is created on download.")
         st.download_button(
             "Markdown (.md)",
             data=markdown_data,
@@ -524,7 +591,13 @@ def _render_export_popover(manuscript, sections, sources, assets):
                 with st.spinner("Preparing Word document…"):
                     docx_entry = {
                         "fingerprint": fingerprint,
-                        "data": manuscript_docx(manuscript, sections, sources, assets),
+                        "data": manuscript_docx(
+                            manuscript,
+                            sections,
+                            sources,
+                            assets,
+                            submission_profile,
+                        ),
                     }
                 st.session_state[docx_key] = docx_entry
             except RuntimeError as exc:
@@ -1140,11 +1213,14 @@ def _render_editor(manuscript, section, sections, sources, assets):
         on_change=_autosave_section_title,
         args=(section["id"],),
     )
+    render_html('<div class="writing-editor-label">Manuscript text</div>')
+    render_markdown_toolbar(content_key)
     st.text_area(
-        "Markdown editor",
+        "Manuscript text",
         key=content_key,
         height=470,
         placeholder="Write this section or ask AI to draft it from attached evidence…",
+        label_visibility="collapsed",
         on_change=_autosave_section,
         args=(section["id"],),
     )
@@ -1541,6 +1617,309 @@ def _render_ai_assistant(manuscript, section, sections, sources, evidence):
         st.rerun()
 
 
+def _apply_submission_template_defaults(manuscript_id: int):
+    template_name = st.session_state.get(
+        f"writing_submission_template_{manuscript_id}",
+        "General IMRaD",
+    )
+    rules = template_rules(template_name)
+    st.session_state[f"writing_submission_word_limit_{manuscript_id}"] = rules["word_limit"]
+    st.session_state[f"writing_submission_abstract_limit_{manuscript_id}"] = rules[
+        "abstract_word_limit"
+    ]
+
+
+def _render_manuscript_checks(manuscript, sections, sources, profile):
+    checks = run_manuscript_checks(manuscript, sections, sources, profile)
+    error_count = checks["counts"].get("error", 0)
+    warning_count = checks["counts"].get("warning", 0)
+
+    with st.expander(
+        f"Manuscript checks · {checks['score']}/100 · {error_count} errors · {warning_count} warnings",
+        expanded=False,
+    ):
+        render_html(
+            '<div class="writing-check-summary">'
+            f'<div><strong>{safe_html(checks["template"])}</strong><br>'
+            f'{checks["word_count"]:,}/{checks["word_limit"]:,} manuscript words · '
+            f'{checks["abstract_word_count"]:,}/{checks["abstract_word_limit"]:,} abstract words</div>'
+            f'<div class="writing-check-score">{checks["score"]}/100</div></div>'
+        )
+
+        if not checks["issues"]:
+            st.success("No manuscript issues were detected by the current rule set.")
+            return checks
+
+        categories = sorted({issue["category"] for issue in checks["issues"]})
+        filter_col, severity_col = st.columns(2, gap="small")
+
+        with filter_col:
+            category = st.selectbox(
+                "Check category",
+                ["All", *categories],
+                key=f"writing_check_category_{manuscript['id']}",
+            )
+
+        with severity_col:
+            severity = st.selectbox(
+                "Severity",
+                ["All", "error", "warning", "info"],
+                format_func=lambda value: value.title(),
+                key=f"writing_check_severity_{manuscript['id']}",
+            )
+
+        visible = [
+            issue
+            for issue in checks["issues"]
+            if (category == "All" or issue["category"] == category)
+            and (severity == "All" or issue["severity"] == severity)
+        ]
+
+        for index, issue in enumerate(visible):
+            render_html(
+                f'<div class="writing-check-card {safe_html(issue["severity"])}">'
+                f'<strong>{safe_html(issue["title"])}</strong>'
+                f'<span>{safe_html(issue["category"])} · {safe_html(issue["severity"].title())}</span><br>'
+                f'{safe_html(issue["detail"])}'
+                + (
+                    f'<div class="writing-check-suggestion">Suggestion: {safe_html(issue["suggestion"])}</div>'
+                    if issue.get("suggestion")
+                    else ""
+                )
+                + "</div>"
+            )
+
+            if issue.get("section_id") and st.button(
+                f"Open {issue['section_title']}",
+                key=f"writing_open_check_{manuscript['id']}_{index}_{issue['section_id']}",
+            ):
+                st.session_state["writing_section_id"] = issue["section_id"]
+                st.rerun()
+
+    return checks
+
+
+def _clean_editor_records(frame, fields):
+    records = []
+
+    for raw in frame.to_dict("records"):
+        record = {}
+
+        for field in fields:
+            value = raw.get(field, "")
+            record[field] = "" if pd.isna(value) else str(value).strip()
+
+        if record.get(fields[0]):
+            records.append(record)
+
+    return records
+
+
+def _render_publication_panel(manuscript, sections, sources, assets, profile, checks):
+    manuscript_id = manuscript["id"]
+    template_key = f"writing_submission_template_{manuscript_id}"
+    word_limit_key = f"writing_submission_word_limit_{manuscript_id}"
+    abstract_limit_key = f"writing_submission_abstract_limit_{manuscript_id}"
+    st.session_state.setdefault(template_key, profile["journal_template"])
+    st.session_state.setdefault(word_limit_key, profile["word_limit"])
+    st.session_state.setdefault(abstract_limit_key, profile["abstract_word_limit"])
+
+    with st.expander("Publication readiness", expanded=False):
+        render_html(
+            '<div class="writing-panel-title">Submission profile</div>'
+            '<div class="writing-panel-caption">Configure front matter, journal rules, and the final submission checklist.</div>'
+        )
+        journal_template = st.selectbox(
+            "Journal template",
+            list(JOURNAL_TEMPLATES),
+            key=template_key,
+            on_change=_apply_submission_template_defaults,
+            args=(manuscript_id,),
+        )
+        st.caption(JOURNAL_TEMPLATES[journal_template]["description"])
+
+        with st.form(f"writing_submission_profile_form_{manuscript_id}"):
+            journal_col, template_col = st.columns([1.25, 1], gap="small")
+
+            with journal_col:
+                target_journal = st.text_input(
+                    "Target journal",
+                    value=profile["target_journal"],
+                    placeholder="Journal name",
+                )
+                short_title = st.text_input(
+                    "Short title",
+                    value=profile["short_title"],
+                    max_chars=80,
+                )
+
+            with template_col:
+                word_limit = st.number_input(
+                    "Main-text word limit",
+                    min_value=1,
+                    step=100,
+                    key=word_limit_key,
+                )
+                abstract_word_limit = st.number_input(
+                    "Abstract word limit",
+                    min_value=1,
+                    step=25,
+                    key=abstract_limit_key,
+                )
+
+            st.markdown("**Authors**")
+            author_rows = profile["authors"] or [
+                {"name": "", "affiliations": "", "email": "", "orcid": ""}
+            ]
+            authors_frame = st.data_editor(
+                pd.DataFrame(author_rows),
+                num_rows="dynamic",
+                hide_index=True,
+                width="stretch",
+                key=f"writing_submission_authors_{manuscript_id}",
+                column_config={
+                    "name": st.column_config.TextColumn("Name", required=True),
+                    "affiliations": st.column_config.TextColumn("Affiliation IDs", help="For example: 1,2"),
+                    "email": st.column_config.TextColumn("Email"),
+                    "orcid": st.column_config.TextColumn("ORCID"),
+                },
+            )
+
+            st.markdown("**Affiliations**")
+            affiliation_rows = profile["affiliations"] or [
+                {"label": "1", "institution": "", "location": ""}
+            ]
+            affiliations_frame = st.data_editor(
+                pd.DataFrame(affiliation_rows),
+                num_rows="dynamic",
+                hide_index=True,
+                width="stretch",
+                key=f"writing_submission_affiliations_{manuscript_id}",
+                column_config={
+                    "label": st.column_config.TextColumn("ID", width="small"),
+                    "institution": st.column_config.TextColumn("Institution", required=True),
+                    "location": st.column_config.TextColumn("City, country"),
+                },
+            )
+
+            corresponding = profile.get("corresponding_author") or {}
+            corresponding_col, email_col = st.columns(2, gap="small")
+
+            with corresponding_col:
+                corresponding_name = st.text_input(
+                    "Corresponding author",
+                    value=corresponding.get("name", ""),
+                )
+
+            with email_col:
+                corresponding_email = st.text_input(
+                    "Corresponding author email",
+                    value=corresponding.get("email", ""),
+                )
+
+            keywords_text = st.text_input(
+                "Keywords",
+                value=", ".join(profile["keywords"]),
+                placeholder="keyword one, keyword two, keyword three",
+                help="Separate keywords with commas.",
+            )
+
+            st.markdown("**Submission checklist**")
+            checklist = {}
+            checklist_labels = {
+                "author_approval": "All authors approved the final manuscript",
+                "cover_letter": "Cover letter prepared",
+                "conflicts_disclosed": "Conflicts of interest disclosed",
+                "ethics_statement": "Ethics statement verified",
+                "data_availability": "Data availability statement verified",
+                "figures_verified": "Figure resolution and legends verified",
+                "supplementary_files": "Supplementary files attached or not applicable",
+            }
+            checklist_columns = st.columns(2, gap="small")
+
+            for index, (key, label) in enumerate(checklist_labels.items()):
+                with checklist_columns[index % 2]:
+                    checklist[key] = st.checkbox(
+                        label,
+                        value=bool(profile["checklist"].get(key)),
+                        key=f"writing_submission_checklist_{manuscript_id}_{key}",
+                    )
+
+            submitted = st.form_submit_button(
+                "Save publication profile",
+                width="stretch",
+            )
+
+        if submitted:
+            try:
+                update_manuscript_submission_profile(
+                    manuscript_id,
+                    target_journal=target_journal,
+                    journal_template=journal_template,
+                    short_title=short_title,
+                    authors=_clean_editor_records(
+                        authors_frame,
+                        ("name", "affiliations", "email", "orcid"),
+                    ),
+                    affiliations=_clean_editor_records(
+                        affiliations_frame,
+                        ("institution", "label", "location"),
+                    ),
+                    corresponding_author={
+                        "name": corresponding_name.strip(),
+                        "email": corresponding_email.strip(),
+                    },
+                    keywords=[value.strip() for value in keywords_text.split(",") if value.strip()],
+                    word_limit=word_limit,
+                    abstract_word_limit=abstract_word_limit,
+                    checklist=checklist,
+                )
+                st.toast("Publication profile saved.")
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
+
+        readiness = publication_readiness(
+            manuscript,
+            sections,
+            sources,
+            assets,
+            profile,
+            checks,
+        )
+        render_html(
+            f'<div class="writing-check-summary"><div><strong>Submission checklist</strong><br>'
+            f'{readiness["complete"]}/{readiness["total"]} checks completed</div>'
+            f'<div class="writing-check-score">{readiness["percent"]}%</div></div>'
+        )
+        items_html = "".join(
+            f'<div class="writing-ready-item {"done" if item["complete"] else ""}">'
+            f'{"✓" if item["complete"] else "○"} <strong>{safe_html(item["label"])}</strong><br>'
+            f'{safe_html(item["detail"])}</div>'
+            for item in readiness["items"]
+        )
+        render_html(f'<div class="writing-ready-grid">{items_html}</div>')
+        abstract_section = next(
+            (
+                section
+                for section in sections
+                if str(section["section_type"]).casefold() == "abstract"
+            ),
+            None,
+        )
+
+        if abstract_section and st.button(
+            "Open Abstract section",
+            key=f"writing_open_submission_abstract_{manuscript_id}",
+        ):
+            st.session_state["writing_section_id"] = abstract_section["id"]
+            st.rerun()
+
+        st.caption(
+            "Journal requirements change. Treat the selected template as an editable starting point and verify the target journal's current author instructions before submission."
+        )
+
+
 def _render_manuscript_tab(manuscript):
     sections = get_manuscript_sections(manuscript["id"])
     sources = get_manuscript_sources(manuscript["id"])
@@ -1565,6 +1944,17 @@ def _render_manuscript_tab(manuscript):
 
     with assistant_col:
         _render_ai_assistant(manuscript, section, sections, sources, evidence)
+
+    profile = get_manuscript_submission_profile(manuscript["id"])
+    checks = _render_manuscript_checks(manuscript, sections, sources, profile)
+    _render_publication_panel(
+        manuscript,
+        sections,
+        sources,
+        assets,
+        profile,
+        checks,
+    )
 
 
 def _render_source_card(source, manuscript, selected_section_id: int | None):
@@ -1800,9 +2190,54 @@ def _version_text(version_id: int | None, manuscript, sections) -> str:
     return snapshot_to_text(version["snapshot"]) if version else ""
 
 
+def _snapshot_section_for_current(snapshot: dict, current_section) -> dict | None:
+    snapshot_sections = snapshot.get("sections", [])
+    current_id = int(current_section["id"])
+    by_id = next(
+        (row for row in snapshot_sections if int(row.get("id") or 0) == current_id),
+        None,
+    )
+
+    if by_id:
+        return by_id
+
+    current_type = str(current_section["section_type"] or "").casefold()
+    current_title = str(current_section["title"] or "").casefold()
+    return next(
+        (
+            row
+            for row in snapshot_sections
+            if str(row.get("section_type") or "").casefold() == current_type
+            and str(row.get("title") or "").casefold() == current_title
+        ),
+        None,
+    )
+
+
+def _version_section_text(version_id: int, current_section, versions_by_id) -> str:
+    if version_id == 0:
+        return str(current_section["content_md"] or "")
+
+    version = versions_by_id.get(version_id)
+
+    if not version:
+        return ""
+
+    snapshot_section = _snapshot_section_for_current(version["snapshot"], current_section)
+    return (
+        str(snapshot_section.get("content_md") or "")
+        if snapshot_section
+        else "[Section not present in this version]"
+    )
+
+
 def _render_versions_tab(manuscript):
     render_html('<div class="writing-versions-scope"></div>')
     versions = get_manuscript_versions(manuscript["id"])
+    version_details = {
+        version["id"]: get_manuscript_version(version["id"])
+        for version in versions
+    }
     sections = get_manuscript_sections(manuscript["id"])
     create_col, compare_col = st.columns([1, 2], gap="small")
 
@@ -1813,18 +2248,38 @@ def _render_versions_tab(manuscript):
         )
 
         with st.form("create_manuscript_version_form", clear_on_submit=True):
-            label = st.text_input(
-                "Version name",
-                placeholder=f"Draft {len(versions) + 1}",
+            label_preset = st.selectbox(
+                "Version label",
+                (
+                    "Before supervisor review",
+                    "Before co-author review",
+                    "Before journal submission",
+                    "Milestone draft",
+                    "Custom label",
+                ),
             )
-            note = st.text_area("Note", height=90)
+            custom_label = st.text_input(
+                "Custom label",
+                placeholder=f"Draft {len(versions) + 1}",
+                disabled=label_preset != "Custom label",
+            )
+            note = st.text_area(
+                "Version description",
+                height=90,
+                placeholder="What changed or what should reviewers focus on?",
+            )
             submitted = st.form_submit_button("Save version", width="stretch")
 
         if submitted:
             try:
+                label = (
+                    custom_label or f"Draft {len(versions) + 1}"
+                    if label_preset == "Custom label"
+                    else label_preset
+                )
                 create_manuscript_version(
                     manuscript["id"],
-                    label or f"Draft {len(versions) + 1}",
+                    label,
                     note=note,
                 )
                 st.toast("Version saved.")
@@ -1835,17 +2290,40 @@ def _render_versions_tab(manuscript):
     with compare_col:
         render_html(
             '<div class="writing-panel-title">Compare versions</div>'
-            '<div class="writing-panel-caption">Review line-level additions and removals.</div>'
+            '<div class="writing-panel-caption">Compare the whole manuscript or the same section between snapshots.</div>'
         )
         options = [0, *[version["id"] for version in versions]]
-        versions_by_id = {version["id"]: version for version in versions}
+        versions_by_id = {
+            version_id: details
+            for version_id, details in version_details.items()
+            if details
+        }
 
         def version_label(value):
             if value == 0:
                 return "Current manuscript"
 
-            row = versions_by_id[value]
+            row = next(version for version in versions if version["id"] == value)
             return f"{row['label']} · {compact_date(row['created_at'])}"
+
+        compare_scope = st.radio(
+            "Comparison scope",
+            ("Whole manuscript", "Single section"),
+            horizontal=True,
+            key=f"writing_diff_scope_{manuscript['id']}",
+        )
+        compare_section = None
+
+        if compare_scope == "Single section" and sections:
+            section_ids = [section["id"] for section in sections]
+            section_by_id = {section["id"]: section for section in sections}
+            compare_section_id = st.selectbox(
+                "Section",
+                section_ids,
+                format_func=lambda value: section_by_id[value]["title"],
+                key=f"writing_diff_section_{manuscript['id']}",
+            )
+            compare_section = section_by_id[compare_section_id]
 
         left_col, right_col = st.columns(2, gap="small")
 
@@ -1854,7 +2332,7 @@ def _render_versions_tab(manuscript):
                 "From",
                 options,
                 format_func=version_label,
-                key="writing_diff_left",
+                key=f"writing_diff_left_{manuscript['id']}",
             )
 
         with right_col:
@@ -1863,11 +2341,23 @@ def _render_versions_tab(manuscript):
                 options,
                 index=1 if len(options) > 1 else 0,
                 format_func=version_label,
-                key="writing_diff_right",
+                key=f"writing_diff_right_{manuscript['id']}",
             )
 
-        left_text = _version_text(left_version, manuscript, sections)
-        right_text = _version_text(right_version, manuscript, sections)
+        if compare_section is not None:
+            left_text = _version_section_text(
+                left_version,
+                compare_section,
+                versions_by_id,
+            )
+            right_text = _version_section_text(
+                right_version,
+                compare_section,
+                versions_by_id,
+            )
+        else:
+            left_text = _version_text(left_version, manuscript, sections)
+            right_text = _version_text(right_version, manuscript, sections)
         diff = "\n".join(
             difflib.unified_diff(
                 left_text.splitlines(),
@@ -1895,7 +2385,10 @@ def _render_versions_tab(manuscript):
 
             with title_col:
                 st.markdown(f"**{version['label']}**")
-                st.caption(version["note"] or "No version note.")
+                render_html(
+                    f'<div class="writing-version-comment">'
+                    f'{safe_html(version["note"] or "No version comment.")}</div>'
+                )
 
             with meta_col:
                 st.caption(
@@ -1904,10 +2397,10 @@ def _render_versions_tab(manuscript):
                     f"{compact_date(version['created_at'])}"
                 )
 
-            restore_col, duplicate_col = st.columns(2, gap="small")
+            restore_col, section_col, duplicate_col = st.columns(3, gap="small")
 
             with restore_col:
-                with st.popover("Restore", width="stretch"):
+                with st.popover("Restore all", width="stretch"):
                     st.warning("The current manuscript will be saved before restoration.")
 
                     if st.button(
@@ -1926,6 +2419,69 @@ def _render_versions_tab(manuscript):
                         st.toast("Version restored.")
                         st.rerun()
 
+            with section_col:
+                with st.popover("Restore section", width="stretch"):
+                    details = version_details.get(version["id"])
+                    snapshot_sections = details["snapshot"].get("sections", []) if details else []
+
+                    if not snapshot_sections or not sections:
+                        st.caption("No section is available for granular restoration.")
+                    else:
+                        snapshot_ids = [int(row["id"]) for row in snapshot_sections]
+                        snapshot_by_id = {int(row["id"]): row for row in snapshot_sections}
+                        selected_snapshot_id = st.selectbox(
+                            "Version section",
+                            snapshot_ids,
+                            format_func=lambda value: snapshot_by_id[value].get("title", "Untitled section"),
+                            key=f"writing_restore_snapshot_section_{version['id']}",
+                        )
+                        selected_snapshot = snapshot_by_id[selected_snapshot_id]
+                        target_ids = [section["id"] for section in sections]
+                        target_by_id = {section["id"]: section for section in sections}
+                        matching_target = next(
+                            (
+                                section["id"]
+                                for section in sections
+                                if str(section["section_type"]).casefold()
+                                == str(selected_snapshot.get("section_type") or "").casefold()
+                            ),
+                            target_ids[0],
+                        )
+                        target_section_id = st.selectbox(
+                            "Restore into",
+                            target_ids,
+                            index=target_ids.index(matching_target),
+                            format_func=lambda value: target_by_id[value]["title"],
+                            key=f"writing_restore_target_section_{version['id']}_{selected_snapshot_id}",
+                        )
+                        restore_title = st.checkbox(
+                            "Also restore the section title",
+                            key=f"writing_restore_section_title_{version['id']}",
+                        )
+                        st.caption("Restores text and citations. Current figures, tables, and equations are preserved.")
+
+                        if st.button(
+                            "Confirm section restore",
+                            key=f"writing_restore_section_confirm_{version['id']}",
+                            width="stretch",
+                        ):
+                            create_manuscript_version(
+                                manuscript["id"],
+                                f"Before restoring {target_by_id[target_section_id]['title']}",
+                                trigger_type="restore",
+                                note=f"Automatic snapshot before restoring one section from {version['label']}.",
+                            )
+                            restore_manuscript_section_from_version(
+                                version["id"],
+                                selected_snapshot_id,
+                                target_section_id,
+                                restore_title=restore_title,
+                            )
+                            _reset_section_editor(target_section_id)
+                            st.session_state["writing_section_id"] = target_section_id
+                            st.toast("Section restored.")
+                            st.rerun()
+
             with duplicate_col:
                 if st.button(
                     "Duplicate as manuscript",
@@ -1937,6 +2493,75 @@ def _render_versions_tab(manuscript):
                     st.session_state["writing_section_id"] = None
                     st.toast("Version duplicated as a new manuscript.")
                     st.rerun()
+
+            with st.expander("Edit label and description"):
+                with st.form(f"writing_edit_version_{version['id']}"):
+                    edited_label = st.text_input(
+                        "Version label",
+                        value=version["label"],
+                    )
+                    edited_note = st.text_area(
+                        "Version description",
+                        value=version["note"] or "",
+                        height=90,
+                    )
+                    save_annotation = st.form_submit_button(
+                        "Save label and description",
+                        width="stretch",
+                    )
+
+                if save_annotation:
+                    try:
+                        update_manuscript_version(
+                            version["id"],
+                            label=edited_label,
+                            note=edited_note,
+                        )
+                        st.toast("Version annotation saved.")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(str(exc))
+
+            with st.expander(f"Comments · {version['comment_count']}"):
+                comments = get_manuscript_version_comments(version["id"])
+
+                if not comments:
+                    st.caption("No review comments attached to this version.")
+
+                for comment in comments:
+                    render_html(
+                        f'<div class="writing-version-comment"><strong>'
+                        f'{safe_html(comment["author_name"])}</strong> · '
+                        f'{safe_html(compact_date(comment["created_at"]))}<br>'
+                        f'{safe_html(comment["content"])}</div>'
+                    )
+
+                with st.form(f"writing_add_version_comment_{version['id']}", clear_on_submit=True):
+                    comment_author = st.text_input(
+                        "Comment author",
+                        value="Dr. Alex Morgan",
+                    )
+                    comment_content = st.text_area(
+                        "Add review comment",
+                        height=80,
+                        placeholder="Add feedback or a decision associated with this snapshot…",
+                    )
+                    add_comment = st.form_submit_button(
+                        "Add comment",
+                        width="stretch",
+                    )
+
+                if add_comment:
+                    try:
+                        add_manuscript_version_comment(
+                            version["id"],
+                            comment_content,
+                            author_name=comment_author,
+                        )
+                        st.toast("Version comment added.")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(str(exc))
 
 
 render_page_css()
@@ -2050,6 +2675,7 @@ with page_col:
     sections = get_manuscript_sections(manuscript_id)
     sources = get_manuscript_sources(manuscript_id)
     assets = get_manuscript_assets(manuscript_id)
+    submission_profile = get_manuscript_submission_profile(manuscript_id)
     meta_col, status_col, style_col, export_col = st.columns(
         [2.3, .8, .9, .75],
         gap="small",
@@ -2089,7 +2715,13 @@ with page_col:
 
     with export_col:
         st.caption("Export")
-        _render_export_popover(manuscript, sections, sources, assets)
+        _render_export_popover(
+            manuscript,
+            sections,
+            sources,
+            assets,
+            submission_profile,
+        )
 
     with st.expander("Manuscript settings"):
         st.caption("Deleting a manuscript also deletes its sections, versions, and AI history.")

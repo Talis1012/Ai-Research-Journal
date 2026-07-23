@@ -11,6 +11,7 @@ from db.database import init_db
 from db.library_queries import create_library_item
 from db.queries import create_project
 from db.writing_queries import (
+    add_manuscript_version_comment,
     add_manuscript_section,
     attach_manuscript_evidence,
     attach_manuscript_source,
@@ -26,6 +27,9 @@ from db.writing_queries import (
     get_manuscript_section,
     get_manuscript_sections,
     get_manuscript_sources,
+    get_manuscript_submission_profile,
+    get_manuscript_version,
+    get_manuscript_version_comments,
     get_manuscript_versions,
     get_project_library_sources,
     insert_section_citation,
@@ -33,10 +37,13 @@ from db.writing_queries import (
     insert_manuscript_asset_reference,
     move_manuscript_asset,
     restore_manuscript_version,
+    restore_manuscript_section_from_version,
     update_manuscript_section,
     update_manuscript_ai_context,
     update_manuscript_asset,
     update_manuscript_source,
+    update_manuscript_submission_profile,
+    update_manuscript_version,
     validate_section_citations,
 )
 from services.manuscript_export_service import (
@@ -50,6 +57,10 @@ from services.manuscript_asset_service import (
     save_figure_upload,
 )
 from services.writing_service import generate_writing_suggestion
+from services.manuscript_review_service import (
+    publication_readiness,
+    run_manuscript_checks,
+)
 
 
 class FixedWritingProvider:
@@ -496,6 +507,213 @@ class WritingTestCase(unittest.TestCase):
             self.assertIn("Table 1", document_xml)
             self.assertIn("Equation 1", document_xml)
             self.assertIn("Measured concentrations", document_xml)
+
+    def test_text_formatting_is_preserved_in_docx_and_pdf(self):
+        from docx import Document
+
+        section = self._results_section()
+        formatted_content = (
+            "## pH-dependent stability\n"
+            "The **compound** remained _highly stable_ according to the "
+            "[protocol](https://example.com/protocol).\n\n"
+            "- Neutral conditions\n"
+            "- Low variability\n\n"
+            "1. Prepare samples\n"
+            "2. Run HPLC analysis\n\n"
+            "> Stability remained above the acceptance threshold.\n\n"
+            "Use `HPLC` for quantification."
+        )
+        update_manuscript_section(section["id"], content_md=formatted_content)
+        manuscript = get_manuscript(self.manuscript_id)
+        sections = get_manuscript_sections(self.manuscript_id)
+        markdown = manuscript_markdown(manuscript, sections, [])
+        docx_bytes = manuscript_docx(manuscript, sections, [])
+        pdf_bytes = manuscript_pdf(manuscript, sections, [])
+        self.assertIn("**compound**", markdown)
+        self.assertTrue(pdf_bytes.startswith(b"%PDF"))
+
+        document = Document(BytesIO(docx_bytes))
+        heading = next(
+            paragraph
+            for paragraph in document.paragraphs
+            if paragraph.text == "pH-dependent stability"
+        )
+        formatted_paragraph = next(
+            paragraph
+            for paragraph in document.paragraphs
+            if "compound" in paragraph.text
+        )
+        self.assertEqual(heading.style.name, "Heading 2")
+        self.assertTrue(any(run.text == "compound" and run.bold for run in formatted_paragraph.runs))
+        self.assertTrue(any(run.text == "highly stable" and run.italic for run in formatted_paragraph.runs))
+        self.assertEqual(
+            len([p for p in document.paragraphs if p.style.name == "List Bullet"]),
+            2,
+        )
+        self.assertEqual(
+            len([p for p in document.paragraphs if p.style.name == "List Number"]),
+            2,
+        )
+
+        with zipfile.ZipFile(BytesIO(docx_bytes)) as archive:
+            document_xml = archive.read("word/document.xml").decode("utf-8")
+            relationships = archive.read(
+                "word/_rels/document.xml.rels"
+            ).decode("utf-8")
+            self.assertIn("w:hyperlink", document_xml)
+            self.assertIn("https://example.com/protocol", relationships)
+
+    def test_submission_profile_is_versioned_and_exported_to_docx(self):
+        from docx import Document
+
+        abstract = next(
+            section
+            for section in get_manuscript_sections(self.manuscript_id)
+            if section["section_type"] == "abstract"
+        )
+        update_manuscript_section(
+            abstract["id"],
+            content_md="A complete abstract describing the objective, methods, results, and conclusion. " * 5,
+        )
+        profile = update_manuscript_submission_profile(
+            self.manuscript_id,
+            target_journal="Journal of Reproducible Research",
+            journal_template="General IMRaD",
+            short_title="CM-01 stability",
+            authors=[{
+                "name": "Jane Smith",
+                "affiliations": "1",
+                "email": "jane@example.com",
+                "orcid": "0000-0001-2345-6789",
+            }],
+            affiliations=[{
+                "label": "1",
+                "institution": "Research Institute",
+                "location": "Bucharest, Romania",
+            }],
+            corresponding_author={"name": "Jane Smith", "email": "jane@example.com"},
+            keywords=["stability", "HPLC", "formulation"],
+            word_limit=4200,
+            abstract_word_limit=220,
+            checklist={"author_approval": True},
+        )
+        version_id = create_manuscript_version(
+            self.manuscript_id,
+            "Before supervisor review",
+            note="Ready for structured feedback.",
+        )
+        update_manuscript_submission_profile(
+            self.manuscript_id,
+            target_journal="Changed journal",
+        )
+        restore_manuscript_version(version_id)
+        restored_profile = get_manuscript_submission_profile(self.manuscript_id)
+        self.assertEqual(restored_profile["target_journal"], "Journal of Reproducible Research")
+        self.assertEqual(restored_profile["authors"][0]["name"], "Jane Smith")
+
+        update_manuscript_version(
+            version_id,
+            label="Before supervisor review",
+            note="Supervisor comments requested on Results and Discussion.",
+        )
+        self.assertIn("Results", get_manuscript_version(version_id)["note"])
+        add_manuscript_version_comment(
+            version_id,
+            "Please clarify the primary endpoint.",
+            author_name="Supervisor",
+        )
+        comments = get_manuscript_version_comments(version_id)
+        self.assertEqual(len(comments), 1)
+        self.assertEqual(comments[0]["author_name"], "Supervisor")
+
+        manuscript = get_manuscript(self.manuscript_id)
+        sections = get_manuscript_sections(self.manuscript_id)
+        docx_bytes = manuscript_docx(
+            manuscript,
+            sections,
+            [],
+            [],
+            restored_profile,
+        )
+        document = Document(BytesIO(docx_bytes))
+        text = "\n".join(paragraph.text for paragraph in document.paragraphs)
+        self.assertIn("Jane Smith [1]", text)
+        self.assertIn("Research Institute, Bucharest, Romania", text)
+        self.assertIn("Corresponding author: Jane Smith · jane@example.com", text)
+        self.assertIn("Keywords: stability, HPLC, formulation", text)
+
+        with zipfile.ZipFile(BytesIO(docx_bytes)) as archive:
+            footer_xml = archive.read("word/footer1.xml").decode("utf-8")
+            self.assertIn("PAGE", footer_xml)
+
+    def test_single_section_restore_preserves_other_current_sections(self):
+        results = self._results_section()
+        introduction = next(
+            section
+            for section in get_manuscript_sections(self.manuscript_id)
+            if section["section_type"] == "introduction"
+        )
+        update_manuscript_section(results["id"], content_md="Versioned result.")
+        update_manuscript_section(introduction["id"], content_md="Versioned introduction.")
+        version_id = create_manuscript_version(self.manuscript_id, "Section baseline")
+        update_manuscript_section(results["id"], content_md="Current changed result.")
+        update_manuscript_section(introduction["id"], content_md="Keep this current introduction.")
+        restore_manuscript_section_from_version(
+            version_id,
+            results["id"],
+            results["id"],
+        )
+        self.assertEqual(get_manuscript_section(results["id"])["content_md"], "Versioned result.")
+        self.assertEqual(
+            get_manuscript_section(introduction["id"])["content_md"],
+            "Keep this current introduction.",
+        )
+
+    def test_manuscript_checks_cover_evidence_abbreviations_structure_and_limits(self):
+        attach_manuscript_source(self.manuscript_id, self.item_id)
+        results = self._results_section()
+        discussion = next(
+            section
+            for section in get_manuscript_sections(self.manuscript_id)
+            if section["section_type"] == "discussion"
+        )
+        update_manuscript_section(
+            results["id"],
+            content_md=(
+                "HPLC showed a significant increase of 42% under acidic conditions. "
+                "The repeated finding remained clinically important."
+            ),
+        )
+        update_manuscript_section(
+            discussion["id"],
+            content_md="A different mechanism decreased solubility in the final formulation.",
+        )
+        profile = update_manuscript_submission_profile(
+            self.manuscript_id,
+            word_limit=10,
+            abstract_word_limit=5,
+        )
+        manuscript = get_manuscript(self.manuscript_id)
+        sections = get_manuscript_sections(self.manuscript_id)
+        sources = get_manuscript_sources(self.manuscript_id)
+        checks = run_manuscript_checks(manuscript, sections, sources, profile)
+        categories = {issue["category"] for issue in checks["issues"]}
+        self.assertIn("Claims without evidence", categories)
+        self.assertIn("Undefined abbreviations", categories)
+        self.assertIn("Citations", categories)
+        self.assertIn("Incomplete sections", categories)
+        self.assertIn("Results vs Discussion", categories)
+        self.assertIn("Word limits", categories)
+        readiness = publication_readiness(
+            manuscript,
+            sections,
+            sources,
+            [],
+            profile,
+            checks,
+        )
+        self.assertFalse(readiness["ready"])
+        self.assertLess(readiness["percent"], 100)
 
 
 if __name__ == "__main__":

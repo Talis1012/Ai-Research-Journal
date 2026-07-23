@@ -14,6 +14,14 @@ from services.manuscript_asset_service import (
 
 ASSET_TYPES = ("figure", "table", "equation")
 ASSET_TOKEN_PATTERN = re.compile(r"\[\[(figure|table|equation):(\d+)\]\]")
+INLINE_MARKDOWN_PATTERN = re.compile(
+    r"(?P<bolditalic>\*\*\*(?P<bolditalic_text>.+?)\*\*\*)"
+    r"|(?P<bold>\*\*(?P<bold_text>.+?)\*\*)"
+    r"|(?P<italic_star>(?<!\*)\*(?P<italic_star_text>[^*\n]+?)\*(?!\*))"
+    r"|(?P<italic_under>(?<!\w)_(?P<italic_under_text>[^_\n]+?)_(?!\w))"
+    r"|(?P<link>\[(?P<link_text>[^\]]+)\]\((?P<link_url>(?:https?://|mailto:)[^)\s]+)\))"
+    r"|(?P<code>`(?P<code_text>[^`\n]+)`)"
+)
 
 
 def _author_parts(authors: str) -> list[str]:
@@ -146,6 +154,132 @@ def render_manuscript_text(text: str, sources, style: str, assets) -> str:
     return render_asset_references(render_citations(text, sources, style), assets)
 
 
+def _inline_markdown_parts(text: str) -> list[dict]:
+    parts = []
+    position = 0
+
+    for match in INLINE_MARKDOWN_PATTERN.finditer(str(text or "")):
+        if match.start() > position:
+            parts.append({"kind": "text", "text": text[position:match.start()]})
+
+        if match.group("bolditalic"):
+            parts.append({
+                "kind": "bolditalic",
+                "text": match.group("bolditalic_text"),
+            })
+        elif match.group("bold"):
+            parts.append({"kind": "bold", "text": match.group("bold_text")})
+        elif match.group("italic_star"):
+            parts.append({
+                "kind": "italic",
+                "text": match.group("italic_star_text"),
+            })
+        elif match.group("italic_under"):
+            parts.append({
+                "kind": "italic",
+                "text": match.group("italic_under_text"),
+            })
+        elif match.group("link"):
+            parts.append({
+                "kind": "link",
+                "text": match.group("link_text"),
+                "url": match.group("link_url"),
+            })
+        else:
+            parts.append({"kind": "code", "text": match.group("code_text")})
+
+        position = match.end()
+
+    if position < len(text):
+        parts.append({"kind": "text", "text": text[position:]})
+
+    return parts or [{"kind": "text", "text": str(text or "")}]
+
+
+def _markdown_blocks(text: str) -> list[dict]:
+    blocks = []
+    paragraph_lines = []
+
+    def flush_paragraph():
+        if paragraph_lines:
+            blocks.append({
+                "kind": "paragraph",
+                "text": " ".join(line.strip() for line in paragraph_lines).strip(),
+            })
+            paragraph_lines.clear()
+
+    for raw_line in str(text or "").splitlines():
+        line = raw_line.rstrip()
+
+        if not line.strip():
+            flush_paragraph()
+            continue
+
+        heading = re.match(r"^\s*(#{1,6})\s+(.+)$", line)
+        bullet = re.match(r"^(?P<indent>\s*)[-*+]\s+(?P<text>.+)$", line)
+        numbered = re.match(
+            r"^(?P<indent>\s*)(?P<number>\d+)\.\s+(?P<text>.+)$",
+            line,
+        )
+        quote = re.match(r"^\s*>\s?(?P<text>.+)$", line)
+
+        if heading:
+            flush_paragraph()
+            blocks.append({
+                "kind": "heading",
+                "level": min(len(heading.group(1)), 3),
+                "text": heading.group(2).strip(),
+            })
+        elif bullet:
+            flush_paragraph()
+            blocks.append({
+                "kind": "bullet",
+                "level": len(bullet.group("indent").replace("\t", "    ")) // 4,
+                "text": bullet.group("text").strip(),
+            })
+        elif numbered:
+            flush_paragraph()
+            blocks.append({
+                "kind": "number",
+                "level": len(numbered.group("indent").replace("\t", "    ")) // 4,
+                "number": int(numbered.group("number")),
+                "text": numbered.group("text").strip(),
+            })
+        elif quote:
+            flush_paragraph()
+            blocks.append({"kind": "quote", "text": quote.group("text").strip()})
+        else:
+            paragraph_lines.append(line)
+
+    flush_paragraph()
+    return blocks
+
+
+def _inline_markdown_to_reportlab(text: str) -> str:
+    output = []
+
+    for part in _inline_markdown_parts(text):
+        safe_text = escape(part["text"])
+
+        if part["kind"] == "bolditalic":
+            output.append(f"<b><i>{safe_text}</i></b>")
+        elif part["kind"] == "bold":
+            output.append(f"<b>{safe_text}</b>")
+        elif part["kind"] == "italic":
+            output.append(f"<i>{safe_text}</i>")
+        elif part["kind"] == "code":
+            output.append(f'<font name="Courier">{safe_text}</font>')
+        elif part["kind"] == "link":
+            output.append(
+                f'<a href="{escape(part["url"], quote=True)}" color="#0d65d9">'
+                f"<u>{safe_text}</u></a>"
+            )
+        else:
+            output.append(safe_text)
+
+    return "".join(output)
+
+
 def _assets_by_section(assets) -> dict[int, list[dict]]:
     grouped = defaultdict(list)
 
@@ -259,7 +393,7 @@ def _configure_docx_table(table, columns: int):
     table_properties.append(indentation)
     margins = OxmlElement("w:tblCellMar")
 
-    for side, width in (("top", 80), ("left", 100), ("bottom", 80), ("right", 100)):
+    for side, width in (("top", 80), ("left", 120), ("bottom", 80), ("right", 120)):
         node = OxmlElement(f"w:{side}")
         node.set(qn("w:w"), str(width))
         node.set(qn("w:type"), "dxa")
@@ -393,33 +527,292 @@ def _add_docx_asset(document, asset):
     _configure_docx_table(table, len(columns))
 
 
-def manuscript_docx(manuscript, sections, sources, assets=()) -> bytes:
+def _add_docx_hyperlink(paragraph, text: str, url: str):
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    from docx.opc.constants import RELATIONSHIP_TYPE
+
+    relationship_id = paragraph.part.relate_to(
+        url,
+        RELATIONSHIP_TYPE.HYPERLINK,
+        is_external=True,
+    )
+    hyperlink = OxmlElement("w:hyperlink")
+    hyperlink.set(qn("r:id"), relationship_id)
+    run = OxmlElement("w:r")
+    run_properties = OxmlElement("w:rPr")
+    color = OxmlElement("w:color")
+    color.set(qn("w:val"), "0D65D9")
+    underline = OxmlElement("w:u")
+    underline.set(qn("w:val"), "single")
+    run_properties.extend((color, underline))
+    run.append(run_properties)
+    text_element = OxmlElement("w:t")
+    text_element.text = text
+    run.append(text_element)
+    hyperlink.append(run)
+    paragraph._p.append(hyperlink)
+
+
+def _add_docx_inline(paragraph, text: str):
+    from docx.shared import Pt, RGBColor
+
+    for part in _inline_markdown_parts(text):
+        if part["kind"] == "link":
+            _add_docx_hyperlink(paragraph, part["text"], part["url"])
+            continue
+
+        run = paragraph.add_run(part["text"])
+
+        if part["kind"] in ("bold", "bolditalic"):
+            run.bold = True
+
+        if part["kind"] in ("italic", "bolditalic"):
+            run.italic = True
+
+        if part["kind"] == "code":
+            run.font.name = "Courier New"
+            run.font.size = Pt(9.5)
+            run.font.color.rgb = RGBColor(52, 64, 84)
+
+
+def _add_docx_markdown_content(document, content: str):
+    from docx.shared import Inches
+
+    for block in _markdown_blocks(content):
+        kind = block["kind"]
+
+        if kind == "heading":
+            paragraph = document.add_heading("", level=block["level"])
+        elif kind == "bullet":
+            paragraph = document.add_paragraph(style="List Bullet")
+            paragraph.paragraph_format.left_indent = Inches(
+                0.375 + 0.25 * block.get("level", 0)
+            )
+            paragraph.paragraph_format.first_line_indent = Inches(-0.194)
+        elif kind == "number":
+            paragraph = document.add_paragraph(style="List Number")
+            paragraph.paragraph_format.left_indent = Inches(
+                0.375 + 0.25 * block.get("level", 0)
+            )
+            paragraph.paragraph_format.first_line_indent = Inches(-0.194)
+        elif kind == "quote":
+            quote_style = (
+                "Intense Quote"
+                if "Intense Quote" in [style.name for style in document.styles]
+                else None
+            )
+            paragraph = document.add_paragraph(style=quote_style)
+            paragraph.paragraph_format.left_indent = Inches(0.3)
+            paragraph.paragraph_format.right_indent = Inches(0.3)
+        else:
+            paragraph = document.add_paragraph()
+
+        _add_docx_inline(paragraph, block["text"])
+
+
+def _set_docx_style_font(style, font_name: str, size, color=None):
+    from docx.oxml.ns import qn
+
+    style.font.name = font_name
+    style.font.size = size
+    style._element.get_or_add_rPr().rFonts.set(qn("w:ascii"), font_name)
+    style._element.get_or_add_rPr().rFonts.set(qn("w:hAnsi"), font_name)
+
+    if color is not None:
+        style.font.color.rgb = color
+
+
+def _configure_submission_docx(document):
+    from docx.enum.section import WD_ORIENT
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    from docx.shared import Inches, Pt, RGBColor
+
+    page = document.sections[0]
+    page.page_width = Inches(8.5)
+    page.page_height = Inches(11)
+    page.orientation = WD_ORIENT.PORTRAIT
+    page.top_margin = Inches(1)
+    page.bottom_margin = Inches(1)
+    page.left_margin = Inches(1)
+    page.right_margin = Inches(1)
+    page.header_distance = Inches(0.492)
+    page.footer_distance = Inches(0.492)
+    normal = document.styles["Normal"]
+    _set_docx_style_font(normal, "Calibri", Pt(11))
+    normal.paragraph_format.space_before = Pt(0)
+    normal.paragraph_format.space_after = Pt(8)
+    normal.paragraph_format.line_spacing = 1.333
+    normal.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    title_style = document.styles["Title"]
+    _set_docx_style_font(title_style, "Calibri", Pt(20), RGBColor(11, 37, 69))
+    title_style.font.bold = True
+    title_style.paragraph_format.space_before = Pt(0)
+    title_style.paragraph_format.space_after = Pt(8)
+
+    heading_tokens = {
+        "Heading 1": (16, "2E74B5", 18, 10),
+        "Heading 2": (13, "2E74B5", 12, 6),
+        "Heading 3": (12, "1F4D78", 8, 4),
+    }
+
+    for style_name, (size, color, before, after) in heading_tokens.items():
+        style = document.styles[style_name]
+        _set_docx_style_font(
+            style,
+            "Calibri",
+            Pt(size),
+            RGBColor.from_string(color),
+        )
+        style.font.bold = True
+        style.paragraph_format.space_before = Pt(before)
+        style.paragraph_format.space_after = Pt(after)
+        style.paragraph_format.keep_with_next = True
+
+    for style_name in ("List Bullet", "List Number"):
+        style = document.styles[style_name]
+        _set_docx_style_font(style, "Calibri", Pt(11))
+        style.paragraph_format.left_indent = Inches(0.375)
+        style.paragraph_format.first_line_indent = Inches(-0.194)
+        style.paragraph_format.space_after = Pt(4)
+        style.paragraph_format.line_spacing = 1.208
+
+    footer = page.footer
+    paragraph = footer.paragraphs[0]
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    run = paragraph.add_run("Page ")
+    run.font.name = "Calibri"
+    run.font.size = Pt(9)
+    field = OxmlElement("w:fldSimple")
+    field.set(qn("w:instr"), "PAGE")
+    paragraph._p.append(field)
+
+
+def _clean_profile_value(value) -> str:
+    text = str(value or "").strip()
+    return "" if text.casefold() in {"nan", "none"} else text
+
+
+def _add_submission_title_block(document, manuscript, submission_profile):
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.shared import Pt, RGBColor
+
+    profile = submission_profile or {}
+    title = document.add_paragraph()
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    title.paragraph_format.space_before = Pt(0)
+    title.paragraph_format.space_after = Pt(8)
+    title_run = title.add_run(manuscript["title"])
+    title_run.bold = True
+    title_run.font.name = "Calibri"
+    title_run.font.size = Pt(20)
+    title_run.font.color.rgb = RGBColor(11, 37, 69)
+    authors = profile.get("authors") or []
+
+    if authors:
+        author_parts = []
+
+        for author in authors:
+            name = _clean_profile_value(author.get("name"))
+            affiliations = _clean_profile_value(author.get("affiliations"))
+
+            if name:
+                author_parts.append(f"{name} [{affiliations}]" if affiliations else name)
+
+        if author_parts:
+            paragraph = document.add_paragraph()
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            paragraph.paragraph_format.space_after = Pt(5)
+            run = paragraph.add_run(", ".join(author_parts))
+            run.bold = True
+            run.font.name = "Calibri"
+            run.font.size = Pt(11)
+
+    for affiliation in profile.get("affiliations") or []:
+        label = _clean_profile_value(affiliation.get("label"))
+        institution = _clean_profile_value(affiliation.get("institution"))
+        location = _clean_profile_value(affiliation.get("location"))
+
+        if not institution:
+            continue
+
+        paragraph = document.add_paragraph()
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        paragraph.paragraph_format.space_after = Pt(2)
+        text = f"[{label}] {institution}" if label else institution
+
+        if location:
+            text += f", {location}"
+
+        run = paragraph.add_run(text)
+        run.font.name = "Calibri"
+        run.font.size = Pt(9.5)
+        run.font.color.rgb = RGBColor(71, 84, 103)
+
+    corresponding = profile.get("corresponding_author") or {}
+    corresponding_name = _clean_profile_value(corresponding.get("name"))
+    corresponding_email = _clean_profile_value(corresponding.get("email"))
+
+    if corresponding_name or corresponding_email:
+        paragraph = document.add_paragraph()
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        paragraph.paragraph_format.space_before = Pt(6)
+        paragraph.paragraph_format.space_after = Pt(3)
+        run = paragraph.add_run(
+            "Corresponding author: "
+            + " · ".join(value for value in (corresponding_name, corresponding_email) if value)
+        )
+        run.font.name = "Calibri"
+        run.font.size = Pt(9.5)
+
+    target_journal = _clean_profile_value(profile.get("target_journal"))
+
+    if target_journal:
+        paragraph = document.add_paragraph()
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        paragraph.paragraph_format.space_after = Pt(10)
+        run = paragraph.add_run(f"Prepared for submission to {target_journal}")
+        run.italic = True
+        run.font.name = "Calibri"
+        run.font.size = Pt(9.5)
+        run.font.color.rgb = RGBColor(71, 84, 103)
+
+
+def _add_docx_bibliography_entry(document, text: str):
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.shared import Inches
+
+    paragraph = document.add_paragraph()
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    paragraph.paragraph_format.left_indent = Inches(0.25)
+    paragraph.paragraph_format.first_line_indent = Inches(-0.25)
+    _add_docx_inline(paragraph, text)
+
+
+def manuscript_docx(
+    manuscript,
+    sections,
+    sources,
+    assets=(),
+    submission_profile=None,
+) -> bytes:
     try:
         from docx import Document
-        from docx.enum.text import WD_ALIGN_PARAGRAPH
-        from docx.shared import Inches, Pt
     except ImportError as exc:
         raise RuntimeError("DOCX export requires the python-docx dependency.") from exc
 
     document = Document()
     document.core_properties.title = manuscript["title"]
     document.core_properties.subject = "Scientific manuscript"
-    page = document.sections[0]
-    page.top_margin = Inches(0.85)
-    page.bottom_margin = Inches(0.85)
-    page.left_margin = Inches(1)
-    page.right_margin = Inches(1)
-    normal = document.styles["Normal"]
-    normal.font.name = "Arial"
-    normal.font.size = Pt(11)
-    normal.paragraph_format.line_spacing = 1.25
-    normal.paragraph_format.space_after = Pt(6)
-    document.styles["Title"].font.name = "Arial"
-    document.styles["Title"].font.size = Pt(20)
-    document.styles["Heading 1"].font.name = "Arial"
-    document.styles["Heading 1"].font.size = Pt(14)
-    title = document.add_heading(manuscript["title"], level=0)
-    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _configure_submission_docx(document)
+    _add_submission_title_block(document, manuscript, submission_profile)
+    corresponding = (submission_profile or {}).get("corresponding_author") or {}
+
+    if corresponding.get("name"):
+        document.core_properties.author = _clean_profile_value(corresponding["name"])
+
     style = manuscript["citation_style"]
     normalized_assets = _normalized_assets(assets)
     grouped_assets = _assets_by_section(normalized_assets)
@@ -432,7 +825,7 @@ def manuscript_docx(manuscript, sections, sources, assets=()) -> bytes:
             lines = bibliography_lines(sources, style)
 
             for line in lines or ["No sources attached."]:
-                document.add_paragraph(line)
+                _add_docx_bibliography_entry(document, line)
 
             references_written = True
         else:
@@ -443,15 +836,13 @@ def manuscript_docx(manuscript, sections, sources, assets=()) -> bytes:
                 normalized_assets,
             )
 
-            for block in re.split(r"\n\s*\n", content.strip()):
-                if not block:
-                    continue
+            _add_docx_markdown_content(document, content)
 
-                if block.startswith("- "):
-                    for line in block.splitlines():
-                        document.add_paragraph(line.removeprefix("- "), style="List Bullet")
-                else:
-                    document.add_paragraph(block)
+            if section["section_type"] == "abstract" and (submission_profile or {}).get("keywords"):
+                paragraph = document.add_paragraph()
+                label = paragraph.add_run("Keywords: ")
+                label.bold = True
+                paragraph.add_run(", ".join(submission_profile["keywords"]))
 
         for asset in grouped_assets.get(int(section["id"]), []):
             _add_docx_asset(document, asset)
@@ -460,7 +851,7 @@ def manuscript_docx(manuscript, sections, sources, assets=()) -> bytes:
         document.add_heading("References", level=1)
 
         for line in bibliography_lines(sources, style):
-            document.add_paragraph(line)
+            _add_docx_bibliography_entry(document, line)
 
     output = io.BytesIO()
     document.save(output)
@@ -587,6 +978,93 @@ def _pdf_asset_flowables(asset, styles, font_name, available_width):
     return [caption, table, Spacer(1, 3 * mm)]
 
 
+def _pdf_markdown_flowables(content: str, styles, font_name):
+    from reportlab.lib import colors
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.platypus import Paragraph
+
+    body_style = ParagraphStyle(
+        "ResearchMarkdownBody",
+        parent=styles["BodyText"],
+        fontName=font_name,
+        fontSize=10.5,
+        leading=15,
+        spaceAfter=8,
+    )
+    heading_two_style = ParagraphStyle(
+        "ResearchMarkdownHeading2",
+        parent=body_style,
+        fontName=font_name,
+        fontSize=12.5,
+        leading=16,
+        textColor=colors.HexColor("#1F4F85"),
+        spaceBefore=7,
+        spaceAfter=5,
+    )
+    heading_three_style = ParagraphStyle(
+        "ResearchMarkdownHeading3",
+        parent=body_style,
+        fontName=font_name,
+        fontSize=11.5,
+        leading=15,
+        textColor=colors.HexColor("#344054"),
+        spaceBefore=5,
+        spaceAfter=4,
+    )
+    quote_style = ParagraphStyle(
+        "ResearchMarkdownQuote",
+        parent=body_style,
+        leftIndent=14,
+        rightIndent=10,
+        borderColor=colors.HexColor("#CBD5E1"),
+        borderWidth=0.6,
+        borderPadding=7,
+        backColor=colors.HexColor("#F8FAFC"),
+        textColor=colors.HexColor("#475467"),
+    )
+    flowables = []
+
+    for block in _markdown_blocks(content):
+        markup = _inline_markdown_to_reportlab(block["text"]) or "&#160;"
+        kind = block["kind"]
+
+        if kind == "heading":
+            paragraph_style = (
+                heading_three_style
+                if block.get("level", 2) >= 3
+                else heading_two_style
+            )
+            flowables.append(Paragraph(markup, paragraph_style))
+        elif kind == "bullet":
+            list_style = ParagraphStyle(
+                f"ResearchBullet{block.get('level', 0)}",
+                parent=body_style,
+                leftIndent=16 + 14 * block.get("level", 0),
+                firstLineIndent=-9,
+                spaceAfter=3,
+            )
+            flowables.append(Paragraph(markup, list_style, bulletText="•"))
+        elif kind == "number":
+            list_style = ParagraphStyle(
+                f"ResearchNumber{block.get('level', 0)}",
+                parent=body_style,
+                leftIndent=18 + 14 * block.get("level", 0),
+                firstLineIndent=-13,
+                spaceAfter=3,
+            )
+            flowables.append(Paragraph(
+                markup,
+                list_style,
+                bulletText=f"{block.get('number', 1)}.",
+            ))
+        elif kind == "quote":
+            flowables.append(Paragraph(markup, quote_style))
+        else:
+            flowables.append(Paragraph(markup, body_style))
+
+    return flowables or [Paragraph("&#160;", body_style)]
+
+
 def manuscript_pdf(manuscript, sections, sources, assets=()) -> bytes:
     try:
         from reportlab.lib.enums import TA_CENTER
@@ -654,11 +1132,13 @@ def manuscript_pdf(manuscript, sections, sources, assets=()) -> bytes:
                 style,
                 normalized_assets,
             )
-            blocks = re.split(r"\n\s*\n", content.strip()) if content.strip() else [""]
+            blocks = None
 
-        for block in blocks:
-            safe_block = escape(block).replace("\n", "<br/>")
-            story.append(Paragraph(safe_block or "&#160;", body_style))
+        if blocks is not None:
+            for block in blocks:
+                story.append(Paragraph(escape(block) or "&#160;", body_style))
+        else:
+            story.extend(_pdf_markdown_flowables(content, styles, font_name))
 
         for asset in grouped_assets.get(int(section["id"]), []):
             story.extend(_pdf_asset_flowables(

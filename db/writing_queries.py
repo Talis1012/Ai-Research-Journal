@@ -19,6 +19,15 @@ DEFAULT_SECTIONS = (
     ("conclusion", "Conclusion"),
     ("references", "References"),
 )
+DEFAULT_SUBMISSION_CHECKLIST = {
+    "author_approval": False,
+    "cover_letter": False,
+    "conflicts_disclosed": False,
+    "ethics_statement": False,
+    "data_availability": False,
+    "figures_verified": False,
+    "supplementary_files": False,
+}
 
 
 def manuscript_word_count(sections) -> int:
@@ -176,6 +185,161 @@ def update_manuscript(
 
     conn.commit()
     conn.close()
+
+
+def _json_list(value: str | None) -> list:
+    try:
+        parsed = json.loads(value or "[]")
+    except (TypeError, json.JSONDecodeError):
+        return []
+
+    return parsed if isinstance(parsed, list) else []
+
+
+def get_manuscript_submission_profile(manuscript_id: int) -> dict:
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM manuscript_submission_profiles WHERE manuscript_id = ?",
+        (manuscript_id,),
+    ).fetchone()
+    conn.close()
+    profile = {
+        "manuscript_id": manuscript_id,
+        "target_journal": "",
+        "journal_template": "General IMRaD",
+        "short_title": "",
+        "authors": [],
+        "affiliations": [],
+        "corresponding_author": {},
+        "keywords": [],
+        "word_limit": 5000,
+        "abstract_word_limit": 250,
+        "checklist": dict(DEFAULT_SUBMISSION_CHECKLIST),
+    }
+
+    if not row:
+        return profile
+
+    profile.update({
+        "target_journal": row["target_journal"] or "",
+        "journal_template": row["journal_template"] or "General IMRaD",
+        "short_title": row["short_title"] or "",
+        "authors": _json_list(row["authors_json"]),
+        "affiliations": _json_list(row["affiliations_json"]),
+        "keywords": [str(value) for value in _json_list(row["keywords_json"]) if str(value).strip()],
+        "word_limit": max(1, int(row["word_limit"] or 5000)),
+        "abstract_word_limit": max(1, int(row["abstract_word_limit"] or 250)),
+    })
+
+    try:
+        corresponding = json.loads(row["corresponding_author_json"] or "{}")
+    except (TypeError, json.JSONDecodeError):
+        corresponding = {}
+
+    try:
+        checklist = json.loads(row["checklist_json"] or "{}")
+    except (TypeError, json.JSONDecodeError):
+        checklist = {}
+
+    profile["corresponding_author"] = corresponding if isinstance(corresponding, dict) else {}
+    profile["checklist"].update(checklist if isinstance(checklist, dict) else {})
+    return profile
+
+
+def update_manuscript_submission_profile(
+    manuscript_id: int,
+    *,
+    target_journal: str = "",
+    journal_template: str = "General IMRaD",
+    short_title: str = "",
+    authors=None,
+    affiliations=None,
+    corresponding_author=None,
+    keywords=None,
+    word_limit: int = 5000,
+    abstract_word_limit: int = 250,
+    checklist=None,
+) -> dict:
+    if not get_manuscript(manuscript_id):
+        raise ValueError("The manuscript no longer exists.")
+
+    journal_template = _require_text(journal_template, "Journal template")
+    word_limit = max(1, int(word_limit))
+    abstract_word_limit = max(1, int(abstract_word_limit))
+    clean_authors = [dict(row) for row in (authors or []) if isinstance(row, dict) and str(row.get("name", "")).strip()]
+    clean_affiliations = [
+        dict(row)
+        for row in (affiliations or [])
+        if isinstance(row, dict) and str(row.get("institution", "")).strip()
+    ]
+    clean_keywords = []
+
+    for value in keywords or []:
+        keyword = str(value or "").strip()
+
+        if keyword and keyword.casefold() not in {item.casefold() for item in clean_keywords}:
+            clean_keywords.append(keyword)
+
+    clean_checklist = dict(DEFAULT_SUBMISSION_CHECKLIST)
+    clean_checklist.update({
+        key: bool(value)
+        for key, value in (checklist or {}).items()
+        if key in clean_checklist
+    })
+    conn = get_connection()
+
+    with conn:
+        conn.execute(
+            """
+            INSERT INTO manuscript_submission_profiles (
+                manuscript_id,
+                target_journal,
+                journal_template,
+                short_title,
+                authors_json,
+                affiliations_json,
+                corresponding_author_json,
+                keywords_json,
+                word_limit,
+                abstract_word_limit,
+                checklist_json,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(manuscript_id) DO UPDATE SET
+                target_journal = excluded.target_journal,
+                journal_template = excluded.journal_template,
+                short_title = excluded.short_title,
+                authors_json = excluded.authors_json,
+                affiliations_json = excluded.affiliations_json,
+                corresponding_author_json = excluded.corresponding_author_json,
+                keywords_json = excluded.keywords_json,
+                word_limit = excluded.word_limit,
+                abstract_word_limit = excluded.abstract_word_limit,
+                checklist_json = excluded.checklist_json,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (
+                manuscript_id,
+                target_journal.strip() or None,
+                journal_template,
+                short_title.strip() or None,
+                json.dumps(clean_authors, ensure_ascii=False),
+                json.dumps(clean_affiliations, ensure_ascii=False),
+                json.dumps(corresponding_author or {}, ensure_ascii=False),
+                json.dumps(clean_keywords, ensure_ascii=False),
+                word_limit,
+                abstract_word_limit,
+                json.dumps(clean_checklist),
+            ),
+        )
+        conn.execute(
+            "UPDATE manuscripts SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (manuscript_id,),
+        )
+
+    conn.close()
+    return get_manuscript_submission_profile(manuscript_id)
 
 
 def delete_manuscript(manuscript_id: int):
@@ -1350,6 +1514,10 @@ def _snapshot_for_manuscript(conn, manuscript_id: int) -> dict:
         """,
         (manuscript_id,),
     ).fetchall()
+    submission_profile = conn.execute(
+        "SELECT * FROM manuscript_submission_profiles WHERE manuscript_id = ?",
+        (manuscript_id,),
+    ).fetchone()
     return {
         "manuscript": {
             "title": manuscript["title"],
@@ -1361,6 +1529,7 @@ def _snapshot_for_manuscript(conn, manuscript_id: int) -> dict:
         "evidence": [dict(row) for row in evidence],
         "citations": [dict(row) for row in citations],
         "assets": [dict(row) for row in assets],
+        "submission_profile": dict(submission_profile) if submission_profile else None,
     }
 
 
@@ -1406,10 +1575,19 @@ def get_manuscript_versions(manuscript_id: int):
     conn = get_connection()
     rows = conn.execute(
         """
-        SELECT id, manuscript_id, label, trigger_type, note, word_count, created_at
-        FROM manuscript_versions
-        WHERE manuscript_id = ?
-        ORDER BY created_at DESC, id DESC
+        SELECT
+            version.id,
+            version.manuscript_id,
+            version.label,
+            version.trigger_type,
+            version.note,
+            version.word_count,
+            version.created_at,
+            (SELECT COUNT(*) FROM manuscript_version_comments comment
+             WHERE comment.version_id = version.id) AS comment_count
+        FROM manuscript_versions version
+        WHERE version.manuscript_id = ?
+        ORDER BY version.created_at DESC, version.id DESC
         """,
         (manuscript_id,),
     ).fetchall()
@@ -1436,6 +1614,76 @@ def get_manuscript_version(version_id: int) -> dict | None:
         result["snapshot"] = {}
 
     return result
+
+
+def update_manuscript_version(
+    version_id: int,
+    *,
+    label: str,
+    note: str = "",
+):
+    label = _require_text(label, "Version label")
+    conn = get_connection()
+    cur = conn.execute(
+        """
+        UPDATE manuscript_versions
+        SET label = ?, note = ?
+        WHERE id = ?
+        """,
+        (label, note.strip() or None, version_id),
+    )
+
+    if cur.rowcount == 0:
+        conn.close()
+        raise ValueError("The selected version no longer exists.")
+
+    conn.commit()
+    conn.close()
+
+
+def add_manuscript_version_comment(
+    version_id: int,
+    content: str,
+    *,
+    author_name: str = "Researcher",
+) -> int:
+    content = _require_text(content, "Comment")
+    author_name = _require_text(author_name, "Comment author")
+    conn = get_connection()
+    version = conn.execute(
+        "SELECT id FROM manuscript_versions WHERE id = ?",
+        (version_id,),
+    ).fetchone()
+
+    if not version:
+        conn.close()
+        raise ValueError("The selected version no longer exists.")
+
+    cur = conn.execute(
+        """
+        INSERT INTO manuscript_version_comments (version_id, author_name, content)
+        VALUES (?, ?, ?)
+        """,
+        (version_id, author_name, content),
+    )
+    comment_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return comment_id
+
+
+def get_manuscript_version_comments(version_id: int):
+    conn = get_connection()
+    rows = conn.execute(
+        """
+        SELECT * FROM manuscript_version_comments
+        WHERE version_id = ?
+        ORDER BY created_at ASC, id ASC
+        """,
+        (version_id,),
+    ).fetchall()
+    conn.close()
+    return rows
 
 
 def _apply_snapshot(conn, manuscript_id: int, snapshot: dict, *, title_override=None):
@@ -1632,6 +1880,54 @@ def _apply_snapshot(conn, manuscript_id: int, snapshot: dict, *, title_override=
                 ),
             )
 
+    submission_profile = snapshot.get("submission_profile")
+
+    if isinstance(submission_profile, dict):
+        conn.execute(
+            """
+            INSERT INTO manuscript_submission_profiles (
+                manuscript_id,
+                target_journal,
+                journal_template,
+                short_title,
+                authors_json,
+                affiliations_json,
+                corresponding_author_json,
+                keywords_json,
+                word_limit,
+                abstract_word_limit,
+                checklist_json,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(manuscript_id) DO UPDATE SET
+                target_journal = excluded.target_journal,
+                journal_template = excluded.journal_template,
+                short_title = excluded.short_title,
+                authors_json = excluded.authors_json,
+                affiliations_json = excluded.affiliations_json,
+                corresponding_author_json = excluded.corresponding_author_json,
+                keywords_json = excluded.keywords_json,
+                word_limit = excluded.word_limit,
+                abstract_word_limit = excluded.abstract_word_limit,
+                checklist_json = excluded.checklist_json,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (
+                manuscript_id,
+                submission_profile.get("target_journal"),
+                submission_profile.get("journal_template") or "General IMRaD",
+                submission_profile.get("short_title"),
+                submission_profile.get("authors_json") or "[]",
+                submission_profile.get("affiliations_json") or "[]",
+                submission_profile.get("corresponding_author_json") or "{}",
+                submission_profile.get("keywords_json") or "[]",
+                max(1, int(submission_profile.get("word_limit") or 5000)),
+                max(1, int(submission_profile.get("abstract_word_limit") or 250)),
+                submission_profile.get("checklist_json") or "{}",
+            ),
+        )
+
 
 def restore_manuscript_version(version_id: int):
     version = get_manuscript_version(version_id)
@@ -1645,6 +1941,99 @@ def restore_manuscript_version(version_id: int):
         _apply_snapshot(conn, version["manuscript_id"], version["snapshot"])
 
     conn.close()
+
+
+def restore_manuscript_section_from_version(
+    version_id: int,
+    snapshot_section_id: int,
+    target_section_id: int,
+    *,
+    restore_title: bool = False,
+) -> int:
+    version = get_manuscript_version(version_id)
+
+    if not version:
+        raise ValueError("The selected version no longer exists.")
+
+    snapshot_section = next(
+        (
+            row
+            for row in version["snapshot"].get("sections", [])
+            if int(row.get("id") or 0) == int(snapshot_section_id)
+        ),
+        None,
+    )
+    target_section = get_manuscript_section(target_section_id)
+
+    if not snapshot_section or not target_section:
+        raise ValueError("Select an existing section from the version and the current manuscript.")
+
+    if int(target_section["manuscript_id"]) != int(version["manuscript_id"]):
+        raise ValueError("The target section belongs to another manuscript.")
+
+    content = str(snapshot_section.get("content_md") or "")
+    snapshot_assets = {
+        int(asset.get("id")): asset
+        for asset in version["snapshot"].get("assets", [])
+        if int(asset.get("section_id") or 0) == int(snapshot_section_id)
+        and asset.get("id") is not None
+    }
+    current_assets = get_manuscript_assets(version["manuscript_id"])
+    current_by_id = {int(asset["id"]): asset for asset in current_assets}
+
+    for old_id, old_asset in snapshot_assets.items():
+        if old_id in current_by_id:
+            continue
+
+        replacement = next(
+            (
+                asset
+                for asset in current_assets
+                if asset["asset_type"] == old_asset.get("asset_type")
+                and str(asset.get("caption") or "").casefold()
+                == str(old_asset.get("caption") or "").casefold()
+            ),
+            None,
+        )
+        old_token = manuscript_asset_reference_token(
+            old_asset.get("asset_type"),
+            old_id,
+        )
+
+        if replacement:
+            content = content.replace(old_token, replacement["reference_token"])
+        else:
+            content = re.sub(rf"\s*{re.escape(old_token)}\s*", " ", content).strip()
+
+    title = (
+        _require_text(snapshot_section.get("title"), "Section title")
+        if restore_title
+        else target_section["title"]
+    )
+    conn = get_connection()
+
+    with conn:
+        conn.execute(
+            """
+            UPDATE manuscript_sections
+            SET title = ?, content_md = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (title, content, target_section_id),
+        )
+        _sync_section_citations(
+            conn,
+            target_section_id,
+            version["manuscript_id"],
+            content,
+        )
+        conn.execute(
+            "UPDATE manuscripts SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (version["manuscript_id"],),
+        )
+
+    conn.close()
+    return target_section_id
 
 
 def duplicate_manuscript_version(version_id: int, title: str | None = None) -> int:

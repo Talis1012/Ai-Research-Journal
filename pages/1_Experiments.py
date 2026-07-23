@@ -39,6 +39,8 @@ from db.queries import (
     save_summary,
     update_audio_transcript_by_message_id,
     update_message_content,
+    update_project_idea,
+    update_summary,
 )
 from services.chat_service import (
     answer_question_about_experiment,
@@ -874,6 +876,10 @@ def generate_selected_insight(
     st.rerun()
 
 
+def clear_insight_edit_state(edit_state_key: str):
+    st.session_state.pop(edit_state_key, None)
+
+
 def render_insight_reader(
     selected_project,
     selected_chat,
@@ -883,6 +889,7 @@ def render_insight_reader(
 ):
     project_id = selected_project["id"]
     selection_key = f"insight_reader_selection_{project_id}"
+    edit_state_key = f"insight_reader_edit_target_{project_id}"
 
     if st.session_state.get(selection_key) not in {"chat", "project", "ideas"}:
         st.session_state[selection_key] = "project"
@@ -907,6 +914,7 @@ def render_insight_reader(
                 width="stretch",
             ):
                 st.session_state[selection_key] = option
+                st.session_state.pop(edit_state_key, None)
                 st.rerun()
 
     selection = st.session_state[selection_key]
@@ -945,6 +953,8 @@ def render_insight_reader(
                         chat_ids,
                         key=reader_chat_key,
                         format_func=lambda chat_id: chats_by_id[chat_id]["title"],
+                        on_change=clear_insight_edit_state,
+                        args=(edit_state_key,),
                     )
                     reader_selected_chat = chats_by_id[reader_chat_id]
                 else:
@@ -960,6 +970,8 @@ def render_insight_reader(
                     "Summary structure",
                     SUMMARY_STYLE_OPTIONS,
                     key=f"chat_summary_style_reader_{project_id}",
+                    on_change=clear_insight_edit_state,
+                    args=(edit_state_key,),
                 )
 
             with header_col:
@@ -987,6 +999,8 @@ def render_insight_reader(
                     "Summary structure",
                     SUMMARY_STYLE_OPTIONS,
                     key=f"project_summary_style_reader_{project_id}",
+                    on_change=clear_insight_edit_state,
+                    args=(edit_state_key,),
                 )
         else:
             render_html(
@@ -1004,43 +1018,101 @@ def render_insight_reader(
                 key=f"custom_{selection}_summary_prompt_reader_{project_id}",
             )
 
+        active_summary = None
+
+        if selection == "project":
+            active_summary = get_project_summary(project_id, summary_style)
+        elif selection == "chat" and reader_selected_chat:
+            active_summary = get_chat_summary(
+                reader_selected_chat["id"],
+                summary_style,
+            )
+
+        if selection in {"chat", "project"} and active_summary:
+            edit_target = f"summary:{active_summary['id']}"
+        elif selection == "ideas" and project_ideas:
+            idea_ids = ":".join(str(idea["id"]) for idea in project_ideas)
+            edit_target = f"ideas:{idea_ids}"
+        else:
+            edit_target = None
+
+        is_editing = bool(
+            edit_target
+            and st.session_state.get(edit_state_key) == edit_target
+        )
+
         with st.container(height=420, border=True):
-            if selection == "project":
-                summary = get_project_summary(
-                    project_id,
-                    summary_style,
-                )
+            if selection in {"chat", "project"} and active_summary:
+                st.caption(f"Structure: {active_summary['summary_style']}")
 
-                if summary:
-                    st.caption(f"Structure: {summary['summary_style']}")
-                    st.markdown(summary["content"])
-                    st.caption(f"Updated {summary['created_at']}")
-                else:
-                    st.info(
-                        "No project summary has been generated for "
-                        f"the structure “{summary_style}”."
+                if is_editing:
+                    summary_editor_key = (
+                        f"insight_summary_editor_{active_summary['id']}"
                     )
+                    st.session_state.setdefault(
+                        summary_editor_key,
+                        active_summary["content"],
+                    )
+                    st.text_area(
+                        "Edit summary",
+                        height=322,
+                        key=summary_editor_key,
+                        label_visibility="collapsed",
+                    )
+                else:
+                    st.markdown(active_summary["content"])
+                    st.caption(f"Updated {active_summary['created_at']}")
+            elif selection == "project":
+                st.info(
+                    "No project summary has been generated for "
+                    f"the structure “{summary_style}”."
+                )
+            elif selection == "chat" and reader_selected_chat:
+                st.info(
+                    "No summary exists for this experiment with "
+                    f"the structure “{summary_style}”."
+                )
             elif selection == "chat":
-                summary = (
-                    get_chat_summary(
-                        reader_selected_chat["id"],
-                        summary_style,
-                    )
-                    if reader_selected_chat
-                    else None
-                )
+                st.info("Select an experiment to read its summary.")
+            elif project_ideas and is_editing:
+                for index, idea in enumerate(project_ideas, start=1):
+                    title_key = f"insight_idea_title_{idea['id']}"
+                    description_key = f"insight_idea_description_{idea['id']}"
+                    evidence_key = f"insight_idea_evidence_{idea['id']}"
+                    importance_key = f"insight_idea_importance_{idea['id']}"
+                    importance = (idea["importance"] or "medium").lower()
 
-                if summary:
-                    st.caption(f"Structure: {summary['summary_style']}")
-                    st.markdown(summary["content"])
-                    st.caption(f"Updated {summary['created_at']}")
-                elif reader_selected_chat:
-                    st.info(
-                        "No summary exists for this experiment with "
-                        f"the structure “{summary_style}”."
+                    st.session_state.setdefault(title_key, idea["title"])
+                    st.session_state.setdefault(
+                        description_key,
+                        idea["description"],
                     )
-                else:
-                    st.info("Select an experiment to read its summary.")
+                    st.session_state.setdefault(
+                        evidence_key,
+                        idea["evidence"] or "",
+                    )
+                    st.session_state.setdefault(
+                        importance_key,
+                        importance if importance in {"high", "medium", "low"}
+                        else "medium",
+                    )
+                    st.text_input(f"Idea {index} title", key=title_key)
+                    st.text_area(
+                        f"Idea {index} description",
+                        height=105,
+                        key=description_key,
+                    )
+                    st.text_area(
+                        f"Idea {index} evidence",
+                        height=82,
+                        key=evidence_key,
+                    )
+                    st.selectbox(
+                        f"Idea {index} importance",
+                        ["high", "medium", "low"],
+                        key=importance_key,
+                    )
+                    st.divider()
             elif project_ideas:
                 for idea in project_ideas:
                     importance = (idea["importance"] or "medium").title()
@@ -1060,11 +1132,116 @@ def render_insight_reader(
             "ideas": "Refresh key ideas",
         }[selection]
 
-        if st.button(
-            action_label,
-            key=f"generate_selected_insight_{project_id}",
-            width="stretch",
-        ):
+        generate_col, edit_col = st.columns([4.1, 1], gap="small")
+
+        with generate_col:
+            generate_clicked = st.button(
+                action_label,
+                key=f"generate_selected_insight_{project_id}",
+                disabled=is_editing,
+                width="stretch",
+            )
+
+        with edit_col:
+            edit_clicked = st.button(
+                "Save" if is_editing else "Edit",
+                key=f"edit_selected_insight_{project_id}",
+                disabled=edit_target is None,
+                type="primary" if is_editing else "secondary",
+                width="stretch",
+            )
+
+        if edit_clicked and not is_editing:
+            st.session_state[edit_state_key] = edit_target
+
+            if active_summary:
+                st.session_state[
+                    f"insight_summary_editor_{active_summary['id']}"
+                ] = active_summary["content"]
+            else:
+                for idea in project_ideas:
+                    importance = (idea["importance"] or "medium").lower()
+                    st.session_state[f"insight_idea_title_{idea['id']}"] = (
+                        idea["title"]
+                    )
+                    st.session_state[
+                        f"insight_idea_description_{idea['id']}"
+                    ] = idea["description"]
+                    st.session_state[f"insight_idea_evidence_{idea['id']}"] = (
+                        idea["evidence"] or ""
+                    )
+                    st.session_state[
+                        f"insight_idea_importance_{idea['id']}"
+                    ] = (
+                        importance
+                        if importance in {"high", "medium", "low"}
+                        else "medium"
+                    )
+
+            st.rerun()
+
+        if edit_clicked and is_editing:
+            if active_summary:
+                summary_editor_key = (
+                    f"insight_summary_editor_{active_summary['id']}"
+                )
+                edited_content = st.session_state.get(
+                    summary_editor_key,
+                    "",
+                ).strip()
+
+                if not edited_content:
+                    st.error("The summary cannot be empty.")
+                else:
+                    update_summary(active_summary["id"], edited_content)
+                    st.session_state.pop(edit_state_key, None)
+                    st.toast("Summary saved.")
+                    st.rerun()
+            else:
+                edited_ideas = []
+
+                for idea in project_ideas:
+                    edited_ideas.append({
+                        "id": idea["id"],
+                        "title": st.session_state.get(
+                            f"insight_idea_title_{idea['id']}",
+                            "",
+                        ).strip(),
+                        "description": st.session_state.get(
+                            f"insight_idea_description_{idea['id']}",
+                            "",
+                        ).strip(),
+                        "evidence": st.session_state.get(
+                            f"insight_idea_evidence_{idea['id']}",
+                            "",
+                        ).strip(),
+                        "importance": st.session_state.get(
+                            f"insight_idea_importance_{idea['id']}",
+                            "medium",
+                        ),
+                    })
+
+                if any(not idea["title"] for idea in edited_ideas):
+                    st.error("Every key idea must have a title.")
+                elif any(not idea["description"] for idea in edited_ideas):
+                    st.error("Every key idea must have a description.")
+                else:
+                    for idea in edited_ideas:
+                        update_project_idea(
+                            idea_id=idea["id"],
+                            title=idea["title"],
+                            description=idea["description"],
+                            evidence=idea["evidence"],
+                            importance=idea["importance"],
+                        )
+
+                    st.session_state.pop(edit_state_key, None)
+                    st.toast("Key ideas saved.")
+                    st.rerun()
+
+        if generate_clicked:
+            st.session_state.pop(edit_state_key, None)
+
             if (
                 selection in {"chat", "project"}
                 and summary_style == SUMMARY_STYLE_CUSTOM

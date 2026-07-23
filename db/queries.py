@@ -841,7 +841,8 @@ def update_summary(summary_id: int, new_content: str):
     cur.execute(
         """
         UPDATE summaries
-        SET content = ?
+        SET content = ?,
+            created_at = CURRENT_TIMESTAMP
         WHERE id = ?
         """,
         (new_content, summary_id)
