@@ -678,5 +678,55 @@ def init_db():
         )
     """)
 
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS manuscript_ai_contexts (
+            manuscript_id INTEGER PRIMARY KEY,
+            context_mode TEXT NOT NULL DEFAULT 'Current section',
+            section_ids_json TEXT NOT NULL DEFAULT '[]',
+            source_ids_json TEXT NOT NULL DEFAULT '[]',
+            evidence_keys_json TEXT NOT NULL DEFAULT '[]',
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (manuscript_id)
+            REFERENCES manuscripts(id)
+            ON DELETE CASCADE,
+
+            CHECK (context_mode IN ('Current section', 'Whole manuscript', 'Custom'))
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS manuscript_assets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            manuscript_id INTEGER NOT NULL,
+            section_id INTEGER NOT NULL,
+            asset_type TEXT NOT NULL,
+            caption TEXT NOT NULL,
+            alt_text TEXT,
+            original_filename TEXT,
+            storage_path TEXT,
+            mime_type TEXT,
+            content_json TEXT NOT NULL DEFAULT '{}',
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (manuscript_id)
+            REFERENCES manuscripts(id)
+            ON DELETE CASCADE,
+
+            FOREIGN KEY (section_id)
+            REFERENCES manuscript_sections(id)
+            ON DELETE CASCADE,
+
+            CHECK (asset_type IN ('figure', 'table', 'equation'))
+        )
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_manuscript_assets_order
+        ON manuscript_assets(manuscript_id, section_id, sort_order, id)
+    """)
+
     conn.commit()
     conn.close()

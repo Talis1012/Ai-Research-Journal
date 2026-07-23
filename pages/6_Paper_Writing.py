@@ -1,12 +1,15 @@
 import difflib
+import hashlib
 import re
 from datetime import datetime
 
+import pandas as pd
 import streamlit as st
 
 from db.database import init_db
 from db.queries import get_projects
 from db.writing_queries import (
+    AI_CONTEXT_MODES,
     CITATION_STYLES,
     MANUSCRIPT_STATUSES,
     add_manuscript_ai_message,
@@ -14,15 +17,19 @@ from db.writing_queries import (
     attach_manuscript_evidence,
     attach_manuscript_source,
     clear_manuscript_ai_messages,
+    create_manuscript_asset,
     create_manuscript,
     create_manuscript_version,
     delete_manuscript,
+    delete_manuscript_asset,
     delete_manuscript_section,
     detach_manuscript_evidence,
     detach_manuscript_source,
     duplicate_manuscript_version,
     get_manuscript,
+    get_manuscript_assets,
     get_manuscript_ai_messages,
+    get_manuscript_ai_context,
     get_manuscript_evidence,
     get_manuscript_section,
     get_manuscript_sections,
@@ -33,20 +40,31 @@ from db.writing_queries import (
     get_project_evidence_candidates,
     get_project_library_sources,
     insert_section_citation,
+    insert_section_citations,
+    insert_manuscript_asset_reference,
     manuscript_word_count,
     move_manuscript_section,
     restore_manuscript_version,
     snapshot_to_text,
     update_manuscript,
+    update_manuscript_asset,
+    update_manuscript_ai_context,
     update_manuscript_section,
     update_manuscript_source,
+    validate_section_citations,
 )
 from services.manuscript_export_service import (
     bibliography_lines,
     manuscript_docx,
     manuscript_markdown,
     manuscript_pdf,
+    render_asset_references,
     render_citations,
+)
+from services.manuscript_asset_service import (
+    delete_manuscript_asset_file,
+    read_manuscript_asset_file,
+    save_figure_upload,
 )
 from services.writing_service import WRITING_MODES, generate_writing_suggestion
 from utils.ui import (
@@ -149,6 +167,38 @@ def render_page_css():
         .writing-ai-note {
             border:1px solid #cfe0f6; background:#f3f8ff; color:#344054;
             border-radius:8px; padding:11px 12px; font-size:.8rem; line-height:1.48;
+        }
+
+        .writing-context-summary {
+            border:1px solid #cfe0f6; background:#f6faff; border-radius:8px;
+            padding:9px 10px; color:#344054; font-size:.74rem; line-height:1.45;
+        }
+
+        .writing-ai-diff {
+            max-height:300px; overflow:auto; border:1px solid #dfe6ef;
+            border-radius:8px; background:#fbfcfe; padding:11px 12px;
+            color:#344054; font-size:.76rem; line-height:1.6; white-space:pre-wrap;
+        }
+        .writing-ai-diff .diff-added {
+            background:#dcfae6; color:#08602f; border-radius:3px; text-decoration:none;
+        }
+        .writing-ai-diff .diff-removed {
+            background:#fee4e2; color:#b42318; border-radius:3px; text-decoration:line-through;
+        }
+
+        .writing-citation-status {
+            border:1px solid #e1e8f0; background:#f8fafc; border-radius:7px;
+            padding:8px 10px; color:#475467; font-size:.72rem; line-height:1.45;
+        }
+
+        .writing-object-label {
+            display:inline-flex; align-items:center; gap:6px; padding:4px 8px;
+            border-radius:999px; background:#eaf3ff; color:#1769d2;
+            font-size:.68rem; font-weight:820; margin-bottom:6px;
+        }
+
+        .writing-object-caption {
+            color:#344054; font-size:.76rem; line-height:1.45; margin-bottom:8px;
         }
 
         .writing-suggestion {
@@ -260,6 +310,126 @@ def _current_manuscript_text(manuscript, sections) -> str:
     return "\n".join(parts).strip()
 
 
+def _evidence_context_key(row) -> str:
+    return f"{row['evidence_type']}:{row['evidence_id']}"
+
+
+def _resolve_ai_context(manuscript_id, section, sections, sources, evidence):
+    settings = get_manuscript_ai_context(manuscript_id)
+    mode = settings["context_mode"]
+
+    if mode == "Whole manuscript":
+        context_sections = list(sections)
+        context_sources = list(sources)
+        context_evidence = list(evidence)
+    elif mode == "Custom":
+        selected_section_ids = set(settings["section_ids"])
+        selected_source_ids = set(settings["source_ids"])
+        selected_evidence_keys = set(settings["evidence_keys"])
+        context_sections = [
+            row for row in sections if row["id"] in selected_section_ids
+        ]
+        context_sources = [
+            row
+            for row in sources
+            if row["library_item_id"] in selected_source_ids
+        ]
+        context_evidence = [
+            row
+            for row in evidence
+            if _evidence_context_key(row) in selected_evidence_keys
+        ]
+    else:
+        context_sections = [section] if section else []
+        context_sources = list(sources)
+        context_evidence = list(evidence)
+
+    return settings, context_sections, context_sources, context_evidence
+
+
+def _split_paragraphs(text: str) -> list[str]:
+    return [
+        paragraph.strip()
+        for paragraph in re.split(r"\n\s*\n", str(text or "").strip())
+        if paragraph.strip()
+    ]
+
+
+def _word_diff_html(current_text: str, suggested_text: str) -> str:
+    token_pattern = r"\s+|[\w'-]+|[^\w\s]"
+    current_tokens = re.findall(token_pattern, str(current_text or ""), flags=re.UNICODE)
+    suggested_tokens = re.findall(token_pattern, str(suggested_text or ""), flags=re.UNICODE)
+    matcher = difflib.SequenceMatcher(None, current_tokens, suggested_tokens)
+    rendered = []
+
+    for operation, left_start, left_end, right_start, right_end in matcher.get_opcodes():
+        left = safe_html("".join(current_tokens[left_start:left_end]))
+        right = safe_html("".join(suggested_tokens[right_start:right_end]))
+
+        if operation == "equal":
+            rendered.append(left)
+        elif operation == "delete":
+            rendered.append(f'<span class="diff-removed">{left}</span>')
+        elif operation == "insert":
+            rendered.append(f'<span class="diff-added">{right}</span>')
+        else:
+            rendered.append(f'<span class="diff-removed">{left}</span>')
+            rendered.append(f'<span class="diff-added">{right}</span>')
+
+    return "".join(rendered)
+
+
+def _merge_suggestion(
+    current_text: str,
+    suggestion_text: str,
+    placement: str,
+    after_paragraph: int | None = None,
+) -> str:
+    current = str(current_text or "").strip()
+    suggestion = str(suggestion_text or "").strip()
+
+    if placement == "replace":
+        return suggestion
+
+    if placement == "beginning":
+        return f"{suggestion}\n\n{current}".strip()
+
+    if placement == "after_paragraph" and current:
+        paragraphs = _split_paragraphs(current)
+        position = max(0, min(int(after_paragraph or 0) + 1, len(paragraphs)))
+        paragraphs.insert(position, suggestion)
+        return "\n\n".join(paragraphs).strip()
+
+    return f"{current}\n\n{suggestion}".strip()
+
+
+def _clear_ai_suggestion():
+    for key in (
+        "writing_ai_suggestion",
+        "writing_ai_suggestion_section_id",
+        "writing_ai_suggestion_mode",
+    ):
+        st.session_state.pop(key, None)
+
+
+def _apply_ai_suggestion(manuscript, section, text: str, placement: str, after_paragraph=None):
+    create_manuscript_version(
+        manuscript["id"],
+        "Before AI suggestion apply",
+        trigger_type="ai",
+        note=f"Automatic snapshot before applying an AI suggestion ({placement}).",
+    )
+    merged = _merge_suggestion(
+        section["content_md"],
+        text,
+        placement,
+        after_paragraph,
+    )
+    update_manuscript_section(section["id"], content_md=merged)
+    _reset_section_editor(section["id"])
+    _clear_ai_suggestion()
+
+
 def _render_create_manuscript(project_id: int, key: str):
     with st.form(key, clear_on_submit=True):
         title = st.text_input(
@@ -283,10 +453,49 @@ def _render_create_manuscript(project_id: int, key: str):
             st.error(str(exc))
 
 
-def _render_export_popover(manuscript, sections, sources):
+def _export_fingerprint(manuscript, sections, sources, assets) -> str:
+    payload = (
+        tuple((key, manuscript[key]) for key in ("id", "title", "citation_style", "updated_at")),
+        [
+            (section["id"], section["title"], section["content_md"], section["updated_at"])
+            for section in sections
+        ],
+        [
+            (
+                source["library_item_id"],
+                source["citation_key"],
+                source["title"],
+                source["authors"],
+                source["publication_year"],
+            )
+            for source in sources
+        ],
+        [
+            (
+                asset["id"],
+                asset["section_id"],
+                asset["asset_type"],
+                asset["caption"],
+                asset.get("storage_path"),
+                repr(asset.get("content", {})),
+                asset["updated_at"],
+            )
+            for asset in assets
+        ],
+    )
+    return hashlib.sha256(repr(payload).encode("utf-8")).hexdigest()
+
+
+def _render_export_popover(manuscript, sections, sources, assets):
     safe_filename = re.sub(r"[^A-Za-z0-9._-]+", "_", manuscript["title"]).strip("_")
     safe_filename = safe_filename or "manuscript"
-    markdown_data = manuscript_markdown(manuscript, sections, sources).encode("utf-8")
+    fingerprint = _export_fingerprint(manuscript, sections, sources, assets)
+    markdown_data = manuscript_markdown(
+        manuscript,
+        sections,
+        sources,
+        assets,
+    ).encode("utf-8")
 
     with st.popover("↓ Export", width="stretch"):
         st.caption("A version snapshot is created when an export is downloaded.")
@@ -300,33 +509,69 @@ def _render_export_popover(manuscript, sections, sources):
             args=(manuscript["id"], "Markdown"),
         )
 
-        try:
-            docx_data = manuscript_docx(manuscript, sections, sources)
+        docx_key = f"writing_prepared_docx_{manuscript['id']}"
+        docx_entry = st.session_state.get(docx_key, {})
+
+        if docx_entry.get("fingerprint") != fingerprint:
+            docx_entry = {}
+
+        if st.button(
+            "Prepare Word (.docx)",
+            key=f"writing_prepare_docx_{manuscript['id']}",
+            width="stretch",
+        ):
+            try:
+                with st.spinner("Preparing Word document…"):
+                    docx_entry = {
+                        "fingerprint": fingerprint,
+                        "data": manuscript_docx(manuscript, sections, sources, assets),
+                    }
+                st.session_state[docx_key] = docx_entry
+            except RuntimeError as exc:
+                st.caption(str(exc))
+
+        if docx_entry:
             st.download_button(
-                "Word (.docx)",
-                data=docx_data,
+                "Download Word (.docx)",
+                data=docx_entry["data"],
                 file_name=f"{safe_filename}.docx",
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 width="stretch",
                 on_click=_create_export_version,
                 args=(manuscript["id"], "DOCX"),
             )
-        except RuntimeError as exc:
-            st.caption(str(exc))
 
-        try:
-            pdf_data = manuscript_pdf(manuscript, sections, sources)
+        pdf_key = f"writing_prepared_pdf_{manuscript['id']}"
+        pdf_entry = st.session_state.get(pdf_key, {})
+
+        if pdf_entry.get("fingerprint") != fingerprint:
+            pdf_entry = {}
+
+        if st.button(
+            "Prepare PDF (.pdf)",
+            key=f"writing_prepare_pdf_{manuscript['id']}",
+            width="stretch",
+        ):
+            try:
+                with st.spinner("Preparing PDF…"):
+                    pdf_entry = {
+                        "fingerprint": fingerprint,
+                        "data": manuscript_pdf(manuscript, sections, sources, assets),
+                    }
+                st.session_state[pdf_key] = pdf_entry
+            except RuntimeError as exc:
+                st.caption(str(exc))
+
+        if pdf_entry:
             st.download_button(
-                "PDF (.pdf)",
-                data=pdf_data,
+                "Download PDF (.pdf)",
+                data=pdf_entry["data"],
                 file_name=f"{safe_filename}.pdf",
                 mime="application/pdf",
                 width="stretch",
                 on_click=_create_export_version,
                 args=(manuscript["id"], "PDF"),
             )
-        except RuntimeError as exc:
-            st.caption(str(exc))
 
 
 def _render_outline(manuscript, sections, sources):
@@ -402,7 +647,483 @@ def _render_outline(manuscript, sections, sources):
     )
 
 
-def _render_editor(manuscript, section, sections, sources):
+def _citation_source_label(source) -> str:
+    authors = str(source["authors"] or "Unknown author").split(";")[0].split(",")[0]
+    year = source["publication_year"] or "n.d."
+    title = str(source["title"] or "Untitled source")
+    return f"[@{source['citation_key']}] · {authors} ({year}) · {title}"
+
+
+def _render_citation_tools(section, sources, current_content: str):
+    validation = validate_section_citations(current_content, sources)
+    used_count = len(validation["valid_keys"])
+    unknown_count = len(validation["unknown_keys"])
+    status_text = f"{used_count} valid citation{'s' if used_count != 1 else ''}"
+
+    if unknown_count:
+        status_text += f" · {unknown_count} unknown"
+
+    with st.expander(f"Citations · {status_text}", expanded=bool(unknown_count)):
+        if validation["unknown_keys"]:
+            st.warning(
+                "Unknown citation keys: "
+                + ", ".join(f"[@{key}]" for key in validation["unknown_keys"])
+            )
+            st.caption("Attach the missing source or replace the token with an attached citation key.")
+        elif validation["valid_keys"]:
+            render_html(
+                '<div class="writing-citation-status">All citation tokens in this section '
+                'match attached sources.</div>'
+            )
+
+        if not sources:
+            st.info("Attach sources in the Sources tab before inserting citations.")
+            return
+
+        source_ids = [source["library_item_id"] for source in sources]
+        sources_by_id = {source["library_item_id"]: source for source in sources}
+        selected_ids = st.multiselect(
+            "Search and select attached sources",
+            source_ids,
+            format_func=lambda value: _citation_source_label(sources_by_id[value]),
+            key=f"writing_quick_citation_sources_{section['id']}",
+            help="Start typing an author, title, DOI, or citation key to filter the list.",
+        )
+        placements = {
+            "End of section": "end",
+            "Beginning of section": "beginning",
+            "After a paragraph": "after_paragraph",
+        }
+        placement_label = st.selectbox(
+            "Insert position",
+            list(placements),
+            key=f"writing_citation_placement_{section['id']}",
+        )
+        after_paragraph = None
+
+        if placements[placement_label] == "after_paragraph":
+            paragraphs = _split_paragraphs(current_content)
+
+            if paragraphs:
+                paragraph_options = list(range(len(paragraphs)))
+                after_paragraph = st.selectbox(
+                    "Insert after",
+                    paragraph_options,
+                    format_func=lambda index: (
+                        f"Paragraph {index + 1} · {paragraphs[index][:70]}"
+                    ),
+                    key=f"writing_citation_after_paragraph_{section['id']}",
+                )
+            else:
+                st.caption("The section is empty; citations will be inserted at the end.")
+
+        if st.button(
+            "＋ Insert selected citations",
+            key=f"writing_insert_selected_citations_{section['id']}",
+            disabled=not selected_ids,
+            width="stretch",
+        ):
+            tokens = insert_section_citations(
+                section["id"],
+                selected_ids,
+                placement=placements[placement_label],
+                after_paragraph=after_paragraph,
+            )
+            _reset_section_editor(section["id"])
+            st.toast(f"Inserted {' '.join(tokens)}")
+            st.rerun()
+
+
+def _asset_option_label(asset) -> str:
+    caption = str(asset.get("caption") or "Untitled object")
+    return f"{asset['label']} · {caption[:72]}"
+
+
+def _parse_table_columns(value: str) -> list[str]:
+    columns = []
+
+    for raw_column in str(value or "").split(","):
+        column = re.sub(r"\s+", " ", raw_column).strip()
+
+        if column and column not in columns:
+            columns.append(column)
+
+    return columns
+
+
+def _clean_table_cell(value) -> str:
+    if pd.isna(value):
+        return ""
+    return str(value)
+
+
+def _render_readonly_asset(asset):
+    caption = f"{asset['label']}. {asset.get('caption', '')}".strip()
+
+    if asset["asset_type"] == "figure":
+        try:
+            st.image(
+                read_manuscript_asset_file(asset["storage_path"]),
+                caption=caption,
+                width="stretch",
+            )
+        except (FileNotFoundError, ValueError, OSError):
+            st.warning(f"{asset['label']}: stored image is unavailable.")
+        return
+
+    if asset["asset_type"] == "equation":
+        st.latex(asset.get("content", {}).get("latex", ""))
+        st.caption(caption)
+        return
+
+    columns = asset.get("content", {}).get("columns", [])
+    rows = asset.get("content", {}).get("rows", [])
+    st.caption(caption)
+    st.dataframe(pd.DataFrame(rows, columns=columns), width="stretch", hide_index=True)
+
+
+def _render_add_manuscript_object(manuscript, section):
+    object_type = st.selectbox(
+        "Object type",
+        ("Figure", "Table", "Equation"),
+        key=f"writing_add_object_type_{section['id']}",
+    )
+
+    if object_type == "Figure":
+        upload = st.file_uploader(
+            "Upload figure",
+            type=("png", "jpg", "jpeg", "webp", "gif", "bmp", "tif", "tiff"),
+            key=f"writing_new_figure_file_{section['id']}",
+            help="Images are validated and stored as PNG. Maximum size: 25 MB.",
+        )
+        caption = st.text_input(
+            "Caption",
+            key=f"writing_new_figure_caption_{section['id']}",
+            placeholder="Describe what the figure shows.",
+        )
+        alt_text = st.text_input(
+            "Alternative text",
+            key=f"writing_new_figure_alt_{section['id']}",
+            placeholder="Concise visual description for accessibility.",
+        )
+
+        if st.button(
+            "Add figure",
+            key=f"writing_add_figure_{section['id']}",
+            disabled=upload is None or not caption.strip(),
+            width="stretch",
+        ):
+            stored = None
+
+            try:
+                stored = save_figure_upload(upload, manuscript["id"])
+                create_manuscript_asset(
+                    manuscript["id"],
+                    section["id"],
+                    "figure",
+                    caption,
+                    alt_text=alt_text,
+                    **stored,
+                )
+                st.toast("Figure added and numbered automatically.")
+                st.rerun()
+            except Exception as exc:
+                if stored:
+                    delete_manuscript_asset_file(stored["storage_path"])
+                st.error(str(exc))
+
+    elif object_type == "Table":
+        caption = st.text_input(
+            "Caption",
+            key=f"writing_new_table_caption_{section['id']}",
+        )
+        columns_text = st.text_input(
+            "Columns (comma separated)",
+            value="Variable, Value, Unit",
+            key=f"writing_new_table_columns_{section['id']}",
+        )
+        row_count = st.number_input(
+            "Initial rows",
+            min_value=1,
+            max_value=50,
+            value=3,
+            key=f"writing_new_table_rows_{section['id']}",
+        )
+        columns = _parse_table_columns(columns_text)
+
+        if st.button(
+            "Create editable table",
+            key=f"writing_add_table_{section['id']}",
+            disabled=not caption.strip() or not columns,
+            width="stretch",
+        ):
+            try:
+                create_manuscript_asset(
+                    manuscript["id"],
+                    section["id"],
+                    "table",
+                    caption,
+                    content={
+                        "columns": columns,
+                        "rows": [dict.fromkeys(columns, "") for _ in range(int(row_count))],
+                    },
+                )
+                st.toast("Editable table created.")
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
+
+    else:
+        caption = st.text_input(
+            "Caption",
+            key=f"writing_new_equation_caption_{section['id']}",
+        )
+        latex = st.text_area(
+            "LaTeX equation",
+            value=r"E = mc^2",
+            height=90,
+            key=f"writing_new_equation_latex_{section['id']}",
+            help="Enter the expression without $$ delimiters.",
+        )
+
+        if latex.strip():
+            st.latex(latex)
+
+        if st.button(
+            "Add equation",
+            key=f"writing_add_equation_{section['id']}",
+            disabled=not caption.strip() or not latex.strip(),
+            width="stretch",
+        ):
+            try:
+                create_manuscript_asset(
+                    manuscript["id"],
+                    section["id"],
+                    "equation",
+                    caption,
+                    content={"latex": latex.strip()},
+                )
+                st.toast("Equation added and numbered automatically.")
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
+
+
+def _render_manage_manuscript_object(
+    manuscript,
+    section,
+    sections,
+    assets,
+    current_content,
+):
+    if not assets:
+        st.info("No figures, tables, or equations have been added yet.")
+        return
+
+    assets_by_id = {asset["id"]: asset for asset in assets}
+    asset_id = st.selectbox(
+        "Select manuscript object",
+        list(assets_by_id),
+        format_func=lambda value: _asset_option_label(assets_by_id[value]),
+        key=f"writing_selected_object_{section['id']}",
+    )
+    asset = assets_by_id[asset_id]
+    section_titles = {row["id"]: row["title"] for row in sections}
+    assigned_section = section_titles.get(asset["section_id"], "Unknown section")
+    render_html(
+        f'<span class="writing-object-label">{safe_html(asset["label"])}</span>'
+        f'<div class="writing-object-caption">Assigned to '
+        f'<strong>{safe_html(assigned_section)}</strong> · references use '
+        f'<code>{safe_html(asset["reference_token"])}</code></div>'
+    )
+    _render_readonly_asset(asset)
+    caption = st.text_input(
+        "Caption",
+        value=asset.get("caption", ""),
+        key=f"writing_object_caption_{asset_id}",
+    )
+    new_upload = None
+    alt_text = asset.get("alt_text", "") or ""
+    latex = asset.get("content", {}).get("latex", "")
+    table_columns = []
+    edited_table = None
+
+    if asset["asset_type"] == "figure":
+        alt_text = st.text_input(
+            "Alternative text",
+            value=alt_text,
+            key=f"writing_object_alt_{asset_id}",
+        )
+        new_upload = st.file_uploader(
+            "Replace image (optional)",
+            type=("png", "jpg", "jpeg", "webp", "gif", "bmp", "tif", "tiff"),
+            key=f"writing_replace_figure_{asset_id}",
+        )
+    elif asset["asset_type"] == "equation":
+        latex = st.text_area(
+            "LaTeX equation",
+            value=latex,
+            height=90,
+            key=f"writing_object_latex_{asset_id}",
+        )
+
+        if latex.strip():
+            st.latex(latex)
+    else:
+        content = asset.get("content", {})
+        old_columns = [str(column) for column in content.get("columns", [])]
+        table_columns_text = st.text_input(
+            "Columns (comma separated)",
+            value=", ".join(old_columns),
+            key=f"writing_object_columns_{asset_id}",
+            help="Save to apply renamed or added columns.",
+        )
+        table_columns = _parse_table_columns(table_columns_text)
+        edited_table = st.data_editor(
+            pd.DataFrame(content.get("rows", []), columns=old_columns),
+            num_rows="dynamic",
+            width="stretch",
+            hide_index=True,
+            key=f"writing_object_table_editor_{asset_id}",
+        )
+
+    if st.button(
+        "Save object",
+        key=f"writing_save_object_{asset_id}",
+        disabled=not caption.strip(),
+        width="stretch",
+    ):
+        stored = None
+
+        try:
+            original_filename = asset.get("original_filename")
+            storage_path = asset.get("storage_path")
+            mime_type = asset.get("mime_type")
+            content = asset.get("content", {})
+
+            if asset["asset_type"] == "figure" and new_upload is not None:
+                stored = save_figure_upload(new_upload, manuscript["id"])
+                original_filename = stored["original_filename"]
+                storage_path = stored["storage_path"]
+                mime_type = stored["mime_type"]
+                content = stored["content"]
+            elif asset["asset_type"] == "equation":
+                if not latex.strip():
+                    raise ValueError("Equation LaTeX is required.")
+                content = {"latex": latex.strip()}
+            elif asset["asset_type"] == "table":
+                if not table_columns:
+                    raise ValueError("Add at least one table column.")
+                rows = []
+
+                for values in edited_table.itertuples(index=False, name=None):
+                    rows.append({
+                        column: _clean_table_cell(
+                            values[index] if index < len(values) else ""
+                        )
+                        for index, column in enumerate(table_columns)
+                    })
+                content = {"columns": table_columns, "rows": rows}
+
+            update_manuscript_asset(
+                asset_id,
+                caption=caption,
+                alt_text=alt_text,
+                original_filename=original_filename,
+                storage_path=storage_path,
+                mime_type=mime_type,
+                content=content,
+            )
+            st.toast(f"{asset['label']} saved.")
+            st.rerun()
+        except Exception as exc:
+            if stored:
+                delete_manuscript_asset_file(stored["storage_path"])
+            st.error(str(exc))
+
+    st.divider()
+    placements = {
+        "End of current section": "end",
+        "Beginning of current section": "beginning",
+        "After a paragraph": "after_paragraph",
+    }
+    placement_label = st.selectbox(
+        "Reference position",
+        list(placements),
+        key=f"writing_object_placement_{section['id']}_{asset_id}",
+    )
+    after_paragraph = None
+
+    if placements[placement_label] == "after_paragraph":
+        paragraphs = _split_paragraphs(current_content)
+
+        if paragraphs:
+            after_paragraph = st.selectbox(
+                "Insert after",
+                list(range(len(paragraphs))),
+                format_func=lambda index: f"Paragraph {index + 1} · {paragraphs[index][:70]}",
+                key=f"writing_object_after_paragraph_{section['id']}_{asset_id}",
+            )
+
+    if st.button(
+        f"Insert {asset['label']} reference",
+        key=f"writing_insert_object_reference_{section['id']}_{asset_id}",
+        width="stretch",
+    ):
+        insert_manuscript_asset_reference(
+            section["id"],
+            asset_id,
+            placement=placements[placement_label],
+            after_paragraph=after_paragraph,
+        )
+        _reset_section_editor(section["id"])
+        st.toast(f"Inserted {asset['label']} in the current section.")
+        st.rerun()
+
+    confirm_delete = st.checkbox(
+        "Remove this object and its in-text references",
+        key=f"writing_confirm_object_delete_{asset_id}",
+    )
+
+    if st.button(
+        "Delete object",
+        key=f"writing_delete_object_{asset_id}",
+        disabled=not confirm_delete,
+        width="stretch",
+    ):
+        delete_manuscript_asset(asset_id)
+        _reset_section_editor(section["id"])
+        st.rerun()
+
+
+def _render_manuscript_objects(manuscript, section, sections, assets, current_content):
+    type_counts = {
+        asset_type: len([asset for asset in assets if asset["asset_type"] == asset_type])
+        for asset_type in ("figure", "table", "equation")
+    }
+    label = (
+        "Figures, tables & equations · "
+        f"{type_counts['figure']} / {type_counts['table']} / {type_counts['equation']}"
+    )
+
+    with st.expander(label, expanded=False):
+        manage_tab, add_tab = st.tabs(["Manage & reference", "Add new"])
+
+        with manage_tab:
+            _render_manage_manuscript_object(
+                manuscript,
+                section,
+                sections,
+                assets,
+                current_content,
+            )
+
+        with add_tab:
+            st.caption(f"New objects are attached to {section['title']} and numbered globally.")
+            _render_add_manuscript_object(manuscript, section)
+
+
+def _render_editor(manuscript, section, sections, sources, assets):
     render_html('<div class="writing-editor-scope"></div>')
 
     if not section:
@@ -427,18 +1148,37 @@ def _render_editor(manuscript, section, sections, sources):
         on_change=_autosave_section,
         args=(section["id"],),
     )
+    _render_citation_tools(
+        section,
+        sources,
+        st.session_state.get(content_key, ""),
+    )
+    _render_manuscript_objects(
+        manuscript,
+        section,
+        sections,
+        assets,
+        st.session_state.get(content_key, ""),
+    )
     saved_at = st.session_state.get("writing_last_saved_at")
     st.caption(
         f"Saved automatically at {saved_at}." if saved_at else "Changes save automatically when the editor loses focus."
     )
 
     with st.expander("Preview formatted section", expanded=False):
-        preview = render_citations(
-            st.session_state.get(content_key, ""),
-            sources,
-            manuscript["citation_style"],
+        preview = render_asset_references(
+            render_citations(
+                st.session_state.get(content_key, ""),
+                sources,
+                manuscript["citation_style"],
+            ),
+            assets,
         )
         st.markdown(preview or "*This section is empty.*")
+
+        for asset in assets:
+            if asset["section_id"] == section["id"]:
+                _render_readonly_asset(asset)
 
 
 def _writing_quick_prompts(mode: str) -> list[tuple[str, str]]:
@@ -463,12 +1203,113 @@ def _writing_quick_prompts(mode: str) -> list[tuple[str, str]]:
     return prompts[mode]
 
 
+def _render_ai_context_selector(manuscript, section, sections, sources, evidence):
+    settings = get_manuscript_ai_context(manuscript["id"])
+    mode_key = f"writing_context_mode_{manuscript['id']}"
+    section_key = f"writing_context_sections_{manuscript['id']}"
+    source_key = f"writing_context_sources_{manuscript['id']}"
+    evidence_key = f"writing_context_evidence_{manuscript['id']}"
+    section_ids = [row["id"] for row in sections]
+    source_ids = [row["library_item_id"] for row in sources]
+    evidence_keys = [_evidence_context_key(row) for row in evidence]
+    sections_by_id = {row["id"]: row for row in sections}
+    sources_by_id = {row["library_item_id"]: row for row in sources}
+    evidence_by_key = {_evidence_context_key(row): row for row in evidence}
+    st.session_state.setdefault(mode_key, settings["context_mode"])
+
+    for widget_key, allowed, saved in (
+        (section_key, section_ids, settings["section_ids"]),
+        (source_key, source_ids, settings["source_ids"]),
+        (evidence_key, evidence_keys, settings["evidence_keys"]),
+    ):
+        allowed_set = set(allowed)
+
+        if widget_key not in st.session_state:
+            st.session_state[widget_key] = [value for value in saved if value in allowed_set]
+        else:
+            st.session_state[widget_key] = [
+                value for value in st.session_state[widget_key] if value in allowed_set
+            ]
+
+    with st.expander(f"Select AI context · {settings['context_mode']}"):
+        selected_mode = st.radio(
+            "Context scope",
+            AI_CONTEXT_MODES,
+            key=mode_key,
+        )
+
+        if selected_mode == "Current section":
+            st.caption(
+                "Uses the active section plus all attached bibliographic sources and project evidence."
+            )
+        elif selected_mode == "Whole manuscript":
+            st.caption(
+                "Uses every manuscript section plus all attached bibliographic sources and project evidence."
+            )
+        else:
+            st.multiselect(
+                "Manuscript sections",
+                section_ids,
+                format_func=lambda value: sections_by_id[value]["title"],
+                key=section_key,
+            )
+            st.multiselect(
+                "Bibliographic sources",
+                source_ids,
+                format_func=lambda value: _citation_source_label(sources_by_id[value]),
+                key=source_key,
+                help="Type to search by title, author, or citation key.",
+            )
+            st.multiselect(
+                "Project evidence",
+                evidence_keys,
+                format_func=lambda value: (
+                    f"{evidence_by_key[value]['evidence_type'].replace('_', ' ').title()} · "
+                    f"{evidence_by_key[value]['label']}"
+                ),
+                key=evidence_key,
+            )
+            st.caption("The active section remains the writing target even when it is not selected here.")
+
+        if st.button(
+            "Save AI context",
+            key=f"writing_save_context_{manuscript['id']}",
+            width="stretch",
+        ):
+            update_manuscript_ai_context(
+                manuscript["id"],
+                context_mode=selected_mode,
+                section_ids=st.session_state.get(section_key, settings["section_ids"]),
+                source_ids=st.session_state.get(source_key, settings["source_ids"]),
+                evidence_keys=st.session_state.get(evidence_key, settings["evidence_keys"]),
+            )
+            st.toast("AI context saved.")
+            st.rerun()
+
+    settings, context_sections, context_sources, context_evidence = _resolve_ai_context(
+        manuscript["id"],
+        section,
+        sections,
+        sources,
+        evidence,
+    )
+    render_html(
+        '<div class="writing-context-summary">'
+        f'<strong>{safe_html(settings["context_mode"])}</strong><br>'
+        f'{len(context_sections)} section(s) · {len(context_sources)} source(s) · '
+        f'{len(context_evidence)} evidence item(s)</div>'
+    )
+    return settings, context_sections, context_sources, context_evidence
+
+
 def _render_ai_assistant(manuscript, section, sections, sources, evidence):
     render_html('<div class="writing-assistant-scope"></div>')
     render_html(
         '<div class="writing-panel-title">✦ AI Writing Assistant</div>'
-        f'<div class="writing-panel-caption">Using {len(evidence)} project evidence items + '
-        f'{len(sources)} bibliographic sources.</div>'
+        '<div class="writing-panel-caption">Choose exactly what AI may use for this request.</div>'
+    )
+    context_settings, context_sections, context_sources, context_evidence = (
+        _render_ai_context_selector(manuscript, section, sections, sources, evidence)
     )
     mode = st.radio(
         "Assistant mode",
@@ -477,8 +1318,8 @@ def _render_ai_assistant(manuscript, section, sections, sources, evidence):
         key="writing_ai_mode",
     )
     render_html(
-        '<div class="writing-ai-note">AI uses only the selected section and attached '
-        'evidence. Suggestions are never applied automatically.</div>'
+        '<div class="writing-ai-note">AI uses only the active context shown above. '
+        'Suggestions are never applied automatically.</div>'
     )
     instruction_key = "writing_ai_instruction"
     prompt_columns = st.columns(2, gap="small")
@@ -524,8 +1365,10 @@ def _render_ai_assistant(manuscript, section, sections, sources, evidence):
                     manuscript=manuscript,
                     section=section,
                     sections=sections,
-                    sources=sources,
-                    evidence=evidence,
+                    sources=context_sources,
+                    evidence=context_evidence,
+                    context_mode=context_settings["context_mode"],
+                    context_sections=context_sections,
                 )
 
             add_manuscript_ai_message(
@@ -546,13 +1389,36 @@ def _render_ai_assistant(manuscript, section, sections, sources, evidence):
     suggestion = st.session_state.get("writing_ai_suggestion")
 
     if suggestion and st.session_state.get("writing_ai_suggestion_section_id") == section["id"]:
-        render_html(
-            f'<div class="writing-suggestion"><strong>Suggested revision</strong><br><br>'
-            f'{safe_html(suggestion.get("suggested_text", "")).replace(chr(10), "<br>")}</div>'
-        )
+        suggestion_mode = st.session_state.get("writing_ai_suggestion_mode")
+        suggested_text = suggestion.get("suggested_text", "")
+        suggestion_tab, changes_tab = st.tabs(["Suggestion", "Changes"])
+
+        with suggestion_tab:
+            render_html(
+                f'<div class="writing-suggestion"><strong>Suggested revision</strong><br><br>'
+                f'{safe_html(suggested_text).replace(chr(10), "<br>")}</div>'
+            )
+
+        with changes_tab:
+            render_html(
+                '<div class="writing-ai-diff">'
+                f'{_word_diff_html(section["content_md"], suggested_text)}'
+                '</div>'
+            )
+            st.caption("Red text will be removed; green text will be added.")
 
         if suggestion.get("explanation"):
             st.caption(suggestion["explanation"])
+
+        context_used = suggestion.get("context_used") or {}
+
+        if context_used:
+            st.caption(
+                f"Context used: {context_used.get('mode', 'Custom')} · "
+                f"{len(context_used.get('section_ids', []))} sections · "
+                f"{len(context_used.get('source_ids', []))} sources · "
+                f"{len(context_used.get('evidence_keys', []))} evidence items"
+            )
 
         if suggestion.get("evidence_used"):
             with st.expander("Evidence used", expanded=True):
@@ -563,7 +1429,7 @@ def _render_ai_assistant(manuscript, section, sections, sources, evidence):
                     )
 
         if suggestion.get("claims"):
-            with st.expander("Claim check", expanded=mode == "Check claims"):
+            with st.expander("Claim check", expanded=suggestion_mode == "Check claims"):
                 for claim in suggestion["claims"]:
                     status_icon = {"supported": "✓", "weak": "△", "unsupported": "!"}[claim["status"]]
                     st.markdown(
@@ -571,48 +1437,114 @@ def _render_ai_assistant(manuscript, section, sections, sources, evidence):
                     )
                     st.caption(claim["reason"] or "No reason returned.")
 
-        if st.session_state.get("writing_ai_suggestion_mode") != "Check claims":
-            insert_col, replace_col = st.columns(2, gap="small")
+        if suggestion_mode != "Check claims":
+            blocks = _split_paragraphs(suggested_text) or [suggested_text.strip()]
+            suggestion_hash = hashlib.sha1(suggested_text.encode("utf-8")).hexdigest()[:10]
+            selected_blocks_key = (
+                f"writing_ai_selected_blocks_{section['id']}_{suggestion_hash}"
+            )
+            block_options = list(range(len(blocks)))
 
-            with insert_col:
-                if st.button("＋ Insert", key="writing_ai_insert", width="stretch"):
-                    create_manuscript_version(
-                        manuscript["id"],
-                        "Before AI insert",
-                        trigger_type="ai",
+            selected_blocks_default = block_options
+
+            if selected_blocks_key in st.session_state:
+                st.session_state[selected_blocks_key] = [
+                    value
+                    for value in st.session_state[selected_blocks_key]
+                    if value in block_options
+                ]
+                selected_blocks_default = None
+
+            selected_blocks = st.multiselect(
+                "Suggested blocks to apply",
+                block_options,
+                default=selected_blocks_default,
+                format_func=lambda index: f"Block {index + 1} · {blocks[index][:75]}",
+                key=selected_blocks_key,
+            )
+            placements = {
+                "Replace current section": "replace",
+                "Append to end": "end",
+                "Insert at beginning": "beginning",
+                "Insert after a paragraph": "after_paragraph",
+            }
+            placement_label = st.selectbox(
+                "Apply position",
+                list(placements),
+                key=f"writing_ai_apply_position_{section['id']}_{suggestion_hash}",
+            )
+            after_paragraph = None
+
+            if placements[placement_label] == "after_paragraph":
+                current_paragraphs = _split_paragraphs(section["content_md"])
+
+                if current_paragraphs:
+                    paragraph_options = list(range(len(current_paragraphs)))
+                    after_paragraph = st.selectbox(
+                        "Insert after",
+                        paragraph_options,
+                        format_func=lambda index: (
+                            f"Paragraph {index + 1} · {current_paragraphs[index][:65]}"
+                        ),
+                        key=f"writing_ai_after_paragraph_{section['id']}_{suggestion_hash}",
                     )
-                    current = section["content_md"].rstrip()
-                    suggested = suggestion["suggested_text"].strip()
-                    combined = f"{current}\n\n{suggested}".strip()
-                    update_manuscript_section(section["id"], content_md=combined)
-                    _reset_section_editor(section["id"])
-                    st.session_state.pop("writing_ai_suggestion", None)
+                else:
+                    st.caption("The section is empty; the suggestion will be appended.")
+
+            selected_text = "\n\n".join(blocks[index] for index in selected_blocks)
+            selected_col, all_col = st.columns(2, gap="small")
+
+            with selected_col:
+                if st.button(
+                    "Apply selected",
+                    key=f"writing_ai_apply_selected_{suggestion_hash}",
+                    disabled=not selected_blocks,
+                    width="stretch",
+                ):
+                    _apply_ai_suggestion(
+                        manuscript,
+                        section,
+                        selected_text,
+                        placements[placement_label],
+                        after_paragraph,
+                    )
+                    st.toast("Selected AI blocks applied.")
                     st.rerun()
 
-            with replace_col:
-                if st.button("↻ Replace section", key="writing_ai_replace", width="stretch"):
-                    create_manuscript_version(
-                        manuscript["id"],
-                        "Before AI replacement",
-                        trigger_type="ai",
+            with all_col:
+                if st.button(
+                    "Apply all",
+                    key=f"writing_ai_apply_all_{suggestion_hash}",
+                    width="stretch",
+                ):
+                    _apply_ai_suggestion(
+                        manuscript,
+                        section,
+                        suggested_text,
+                        placements[placement_label],
+                        after_paragraph,
                     )
-                    update_manuscript_section(
-                        section["id"],
-                        content_md=suggestion["suggested_text"],
-                    )
-                    _reset_section_editor(section["id"])
-                    st.session_state.pop("writing_ai_suggestion", None)
+                    st.toast("AI suggestion applied.")
                     st.rerun()
+
+        if st.button(
+            "Reject suggestion" if suggestion_mode != "Check claims" else "Dismiss analysis",
+            key=f"writing_ai_reject_{section['id']}",
+            width="stretch",
+        ):
+            _clear_ai_suggestion()
+            st.rerun()
 
     if messages and st.button("Clear AI conversation", width="stretch"):
         clear_manuscript_ai_messages(manuscript["id"])
-        st.session_state.pop("writing_ai_suggestion", None)
+        _clear_ai_suggestion()
         st.rerun()
 
 
 def _render_manuscript_tab(manuscript):
     sections = get_manuscript_sections(manuscript["id"])
     sources = get_manuscript_sources(manuscript["id"])
+    assets = get_manuscript_assets(manuscript["id"])
     evidence = get_manuscript_evidence(manuscript["id"])
     section_ids = [section["id"] for section in sections]
 
@@ -629,7 +1561,7 @@ def _render_manuscript_tab(manuscript):
         _render_outline(manuscript, sections, sources)
 
     with editor_col:
-        _render_editor(manuscript, section, sections, sources)
+        _render_editor(manuscript, section, sections, sources, assets)
 
     with assistant_col:
         _render_ai_assistant(manuscript, section, sections, sources, evidence)
@@ -1117,6 +2049,7 @@ with page_col:
     manuscript = get_manuscript(manuscript_id)
     sections = get_manuscript_sections(manuscript_id)
     sources = get_manuscript_sources(manuscript_id)
+    assets = get_manuscript_assets(manuscript_id)
     meta_col, status_col, style_col, export_col = st.columns(
         [2.3, .8, .9, .75],
         gap="small",
@@ -1156,7 +2089,7 @@ with page_col:
 
     with export_col:
         st.caption("Export")
-        _render_export_popover(manuscript, sections, sources)
+        _render_export_popover(manuscript, sections, sources, assets)
 
     with st.expander("Manuscript settings"):
         st.caption("Deleting a manuscript also deletes its sections, versions, and AI history.")

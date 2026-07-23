@@ -6,3 +6,5 @@ streamlit-agraph
 requests
 python-docx
 reportlab
+Pillow
+matplotlib

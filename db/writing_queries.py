@@ -8,6 +8,8 @@ from db.database import get_connection
 
 MANUSCRIPT_STATUSES = ("Draft", "In review", "Final")
 CITATION_STYLES = ("APA 7", "Vancouver")
+AI_CONTEXT_MODES = ("Current section", "Whole manuscript", "Custom")
+MANUSCRIPT_ASSET_TYPES = ("figure", "table", "equation")
 DEFAULT_SECTIONS = (
     ("abstract", "Abstract"),
     ("introduction", "Introduction"),
@@ -290,6 +292,46 @@ def delete_manuscript_section(section_id: int):
     conn = get_connection()
 
     with conn:
+        removed_assets = conn.execute(
+            """
+            SELECT id, asset_type FROM manuscript_assets
+            WHERE section_id = ?
+            """,
+            (section_id,),
+        ).fetchall()
+
+        if removed_assets:
+            other_sections = conn.execute(
+                """
+                SELECT id, content_md FROM manuscript_sections
+                WHERE manuscript_id = ? AND id != ?
+                """,
+                (section["manuscript_id"], section_id),
+            ).fetchall()
+
+            for other_section in other_sections:
+                content = other_section["content_md"] or ""
+
+                for asset in removed_assets:
+                    token = manuscript_asset_reference_token(
+                        asset["asset_type"],
+                        asset["id"],
+                    )
+                    content = re.sub(
+                        rf"\s*{re.escape(token)}\s*",
+                        " ",
+                        content,
+                    ).strip()
+
+                conn.execute(
+                    """
+                    UPDATE manuscript_sections
+                    SET content_md = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (content, other_section["id"]),
+                )
+
         conn.execute("DELETE FROM manuscript_sections WHERE id = ?", (section_id,))
         conn.execute(
             "UPDATE manuscripts SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
@@ -328,6 +370,320 @@ def move_manuscript_section(section_id: int, direction: int):
         )
 
     conn.close()
+
+
+def _json_object(value: str | None) -> dict:
+    try:
+        parsed = json.loads(value or "{}")
+    except (TypeError, json.JSONDecodeError):
+        return {}
+
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def manuscript_asset_reference_token(asset_type: str, asset_id: int) -> str:
+    if asset_type not in MANUSCRIPT_ASSET_TYPES:
+        raise ValueError("Unsupported manuscript object type.")
+
+    return f"[[{asset_type}:{int(asset_id)}]]"
+
+
+def get_manuscript_assets(
+    manuscript_id: int,
+    *,
+    section_id: int | None = None,
+) -> list[dict]:
+    conn = get_connection()
+    rows = conn.execute(
+        """
+        SELECT asset.*, section.sort_order AS section_sort_order
+        FROM manuscript_assets asset
+        JOIN manuscript_sections section ON section.id = asset.section_id
+        WHERE asset.manuscript_id = ?
+        ORDER BY section.sort_order ASC, asset.sort_order ASC, asset.id ASC
+        """,
+        (manuscript_id,),
+    ).fetchall()
+    conn.close()
+    counters = {asset_type: 0 for asset_type in MANUSCRIPT_ASSET_TYPES}
+    assets = []
+
+    for row in rows:
+        asset = dict(row)
+        asset_type = asset["asset_type"]
+        counters[asset_type] = counters.get(asset_type, 0) + 1
+        asset["number"] = counters[asset_type]
+        asset["label"] = f"{asset_type.title()} {asset['number']}"
+        asset["reference_token"] = manuscript_asset_reference_token(
+            asset_type,
+            asset["id"],
+        )
+        asset["content"] = _json_object(asset.pop("content_json", "{}"))
+
+        if section_id is None or asset["section_id"] == section_id:
+            assets.append(asset)
+
+    return assets
+
+
+def get_manuscript_asset(asset_id: int) -> dict | None:
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT manuscript_id FROM manuscript_assets WHERE id = ?",
+        (asset_id,),
+    ).fetchone()
+    conn.close()
+
+    if not row:
+        return None
+
+    return next(
+        (
+            asset
+            for asset in get_manuscript_assets(row["manuscript_id"])
+            if asset["id"] == asset_id
+        ),
+        None,
+    )
+
+
+def create_manuscript_asset(
+    manuscript_id: int,
+    section_id: int,
+    asset_type: str,
+    caption: str,
+    *,
+    alt_text: str = "",
+    original_filename: str | None = None,
+    storage_path: str | None = None,
+    mime_type: str | None = None,
+    content: dict | None = None,
+) -> int:
+    if asset_type not in MANUSCRIPT_ASSET_TYPES:
+        raise ValueError("Unsupported manuscript object type.")
+
+    caption = _require_text(caption, "Caption")
+    conn = get_connection()
+    section = conn.execute(
+        """
+        SELECT id FROM manuscript_sections
+        WHERE id = ? AND manuscript_id = ?
+        """,
+        (section_id, manuscript_id),
+    ).fetchone()
+
+    if not section:
+        conn.close()
+        raise ValueError("The selected manuscript section no longer exists.")
+
+    maximum = conn.execute(
+        """
+        SELECT COALESCE(MAX(sort_order), 0) AS maximum
+        FROM manuscript_assets
+        WHERE manuscript_id = ? AND section_id = ?
+        """,
+        (manuscript_id, section_id),
+    ).fetchone()["maximum"]
+
+    with conn:
+        cur = conn.execute(
+            """
+            INSERT INTO manuscript_assets (
+                manuscript_id,
+                section_id,
+                asset_type,
+                caption,
+                alt_text,
+                original_filename,
+                storage_path,
+                mime_type,
+                content_json,
+                sort_order
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                manuscript_id,
+                section_id,
+                asset_type,
+                caption,
+                str(alt_text or "").strip() or None,
+                original_filename,
+                storage_path,
+                mime_type,
+                json.dumps(content or {}, ensure_ascii=False),
+                maximum + 1,
+            ),
+        )
+        conn.execute(
+            "UPDATE manuscripts SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (manuscript_id,),
+        )
+
+    asset_id = cur.lastrowid
+    conn.close()
+    return asset_id
+
+
+def update_manuscript_asset(
+    asset_id: int,
+    *,
+    caption: str,
+    alt_text: str = "",
+    original_filename: str | None = None,
+    storage_path: str | None = None,
+    mime_type: str | None = None,
+    content: dict | None = None,
+):
+    asset = get_manuscript_asset(asset_id)
+
+    if not asset:
+        raise ValueError("The manuscript object no longer exists.")
+
+    caption = _require_text(caption, "Caption")
+    conn = get_connection()
+
+    with conn:
+        conn.execute(
+            """
+            UPDATE manuscript_assets
+            SET caption = ?,
+                alt_text = ?,
+                original_filename = ?,
+                storage_path = ?,
+                mime_type = ?,
+                content_json = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (
+                caption,
+                str(alt_text or "").strip() or None,
+                original_filename,
+                storage_path,
+                mime_type,
+                json.dumps(content or {}, ensure_ascii=False),
+                asset_id,
+            ),
+        )
+        conn.execute(
+            "UPDATE manuscripts SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (asset["manuscript_id"],),
+        )
+
+    conn.close()
+
+
+def move_manuscript_asset(asset_id: int, direction: int):
+    asset = get_manuscript_asset(asset_id)
+
+    if not asset or direction not in (-1, 1):
+        return
+
+    section_assets = get_manuscript_assets(
+        asset["manuscript_id"],
+        section_id=asset["section_id"],
+    )
+    asset_ids = [item["id"] for item in section_assets]
+    index = asset_ids.index(asset_id)
+    target = index + direction
+
+    if target < 0 or target >= len(asset_ids):
+        return
+
+    asset_ids[index], asset_ids[target] = asset_ids[target], asset_ids[index]
+    conn = get_connection()
+
+    with conn:
+        for order, current_id in enumerate(asset_ids, start=1):
+            conn.execute(
+                "UPDATE manuscript_assets SET sort_order = ? WHERE id = ?",
+                (order, current_id),
+            )
+        conn.execute(
+            "UPDATE manuscripts SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (asset["manuscript_id"],),
+        )
+
+    conn.close()
+
+
+def delete_manuscript_asset(asset_id: int):
+    asset = get_manuscript_asset(asset_id)
+
+    if not asset:
+        return
+
+    token = asset["reference_token"]
+    conn = get_connection()
+
+    with conn:
+        sections = conn.execute(
+            """
+            SELECT id, content_md FROM manuscript_sections
+            WHERE manuscript_id = ? AND content_md LIKE ?
+            """,
+            (asset["manuscript_id"], f"%{token}%"),
+        ).fetchall()
+
+        for section in sections:
+            content = re.sub(
+                rf"\s*{re.escape(token)}\s*",
+                " ",
+                section["content_md"] or "",
+            ).strip()
+            conn.execute(
+                """
+                UPDATE manuscript_sections
+                SET content_md = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (content, section["id"]),
+            )
+
+        conn.execute("DELETE FROM manuscript_assets WHERE id = ?", (asset_id,))
+        conn.execute(
+            "UPDATE manuscripts SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (asset["manuscript_id"],),
+        )
+
+    conn.close()
+
+
+def insert_manuscript_asset_reference(
+    section_id: int,
+    asset_id: int,
+    *,
+    placement: str = "end",
+    after_paragraph: int | None = None,
+) -> str:
+    section = get_manuscript_section(section_id)
+    asset = get_manuscript_asset(asset_id)
+
+    if not section or not asset:
+        raise ValueError("Select an existing section and manuscript object.")
+
+    if section["manuscript_id"] != asset["manuscript_id"]:
+        raise ValueError("The object belongs to another manuscript.")
+
+    token = asset["reference_token"]
+    content = str(section["content_md"] or "").strip()
+
+    if token in content:
+        return token
+
+    if placement == "beginning":
+        updated = f"{token}\n\n{content}".strip()
+    elif placement == "after_paragraph" and content:
+        paragraphs = re.split(r"\n\s*\n", content)
+        position = max(0, min(int(after_paragraph or 0) + 1, len(paragraphs)))
+        paragraphs.insert(position, token)
+        updated = "\n\n".join(paragraphs).strip()
+    else:
+        updated = f"{content} {token}".strip() if content else token
+
+    update_manuscript_section(section_id, content_md=updated)
+    return token
 
 
 def _ascii_slug(value: str) -> str:
@@ -587,31 +943,101 @@ def _sync_section_citations(conn, section_id: int, manuscript_id: int, content: 
             )
 
 
-def insert_section_citation(section_id: int, library_item_id: int):
+def validate_section_citations(content: str, sources) -> dict:
+    tokens = [
+        key.strip()
+        for key in re.findall(r"\[@([^\]]+)\]", content or "")
+        if key.strip()
+    ]
+    attached_by_fold = {
+        str(source["citation_key"]).casefold(): str(source["citation_key"])
+        for source in sources
+    }
+    valid_keys = []
+    unknown_keys = []
+
+    for key in tokens:
+        canonical = attached_by_fold.get(key.casefold())
+        target = valid_keys if canonical else unknown_keys
+        value = canonical or key
+
+        if value not in target:
+            target.append(value)
+
+    used_folds = {key.casefold() for key in valid_keys}
+    unused_keys = [
+        str(source["citation_key"])
+        for source in sources
+        if str(source["citation_key"]).casefold() not in used_folds
+    ]
+    return {
+        "tokens": tokens,
+        "valid_keys": valid_keys,
+        "unknown_keys": unknown_keys,
+        "unused_keys": unused_keys,
+    }
+
+
+def insert_section_citations(
+    section_id: int,
+    library_item_ids,
+    *,
+    placement: str = "end",
+    after_paragraph: int | None = None,
+) -> list[str]:
     section = get_manuscript_section(section_id)
 
     if not section:
         raise ValueError("Select a manuscript section first.")
 
+    item_ids = []
+
+    for value in library_item_ids or []:
+        item_id = int(value)
+
+        if item_id not in item_ids:
+            item_ids.append(item_id)
+
+    if not item_ids:
+        raise ValueError("Select at least one attached source.")
+
     conn = get_connection()
-    source = conn.execute(
-        """
-        SELECT citation_key
+    placeholders = ",".join("?" for _ in item_ids)
+    rows = conn.execute(
+        f"""
+        SELECT library_item_id, citation_key
         FROM manuscript_sources
-        WHERE manuscript_id = ? AND library_item_id = ?
+        WHERE manuscript_id = ? AND library_item_id IN ({placeholders})
         """,
-        (section["manuscript_id"], library_item_id),
-    ).fetchone()
+        (section["manuscript_id"], *item_ids),
+    ).fetchall()
     conn.close()
+    sources_by_id = {row["library_item_id"]: row for row in rows}
+    missing_ids = [item_id for item_id in item_ids if item_id not in sources_by_id]
 
-    if not source:
-        raise ValueError("Attach this source to the manuscript first.")
+    if missing_ids:
+        raise ValueError("Attach every selected source to the manuscript first.")
 
-    token = f"[@{source['citation_key']}]"
-    content = section["content_md"].rstrip()
-    new_content = f"{content} {token}".strip() if content else token
+    tokens = [f"[@{sources_by_id[item_id]['citation_key']}]" for item_id in item_ids]
+    citation_text = " ".join(tokens)
+    content = str(section["content_md"] or "").strip()
+
+    if placement == "beginning":
+        new_content = f"{citation_text}\n\n{content}".strip()
+    elif placement == "after_paragraph" and content:
+        paragraphs = re.split(r"\n\s*\n", content)
+        position = max(0, min(int(after_paragraph or 0) + 1, len(paragraphs)))
+        paragraphs.insert(position, citation_text)
+        new_content = "\n\n".join(paragraphs).strip()
+    else:
+        new_content = f"{content} {citation_text}".strip() if content else citation_text
+
     update_manuscript_section(section_id, content_md=new_content)
-    return token
+    return tokens
+
+
+def insert_section_citation(section_id: int, library_item_id: int):
+    return insert_section_citations(section_id, [library_item_id])[0]
 
 
 def get_project_evidence_candidates(project_id: int) -> list[dict]:
@@ -695,6 +1121,150 @@ def get_manuscript_evidence(manuscript_id: int):
     return rows
 
 
+def _json_list(value: str | None) -> list:
+    try:
+        parsed = json.loads(value or "[]")
+    except (TypeError, json.JSONDecodeError):
+        return []
+
+    return parsed if isinstance(parsed, list) else []
+
+
+def get_manuscript_ai_context(manuscript_id: int) -> dict:
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM manuscript_ai_contexts WHERE manuscript_id = ?",
+        (manuscript_id,),
+    ).fetchone()
+    conn.close()
+
+    if not row:
+        return {
+            "manuscript_id": manuscript_id,
+            "context_mode": "Current section",
+            "section_ids": [],
+            "source_ids": [],
+            "evidence_keys": [],
+        }
+
+    return {
+        "manuscript_id": manuscript_id,
+        "context_mode": (
+            row["context_mode"]
+            if row["context_mode"] in AI_CONTEXT_MODES
+            else "Current section"
+        ),
+        "section_ids": [
+            int(value)
+            for value in _json_list(row["section_ids_json"])
+            if str(value).isdigit()
+        ],
+        "source_ids": [
+            int(value)
+            for value in _json_list(row["source_ids_json"])
+            if str(value).isdigit()
+        ],
+        "evidence_keys": [
+            str(value)
+            for value in _json_list(row["evidence_keys_json"])
+            if re.fullmatch(r"(?:experiment|summary|key_idea):\d+", str(value))
+        ],
+    }
+
+
+def update_manuscript_ai_context(
+    manuscript_id: int,
+    *,
+    context_mode: str,
+    section_ids=None,
+    source_ids=None,
+    evidence_keys=None,
+) -> dict:
+    if context_mode not in AI_CONTEXT_MODES:
+        raise ValueError("Unsupported AI context mode.")
+
+    requested_sections = {
+        int(value) for value in (section_ids or []) if str(value).isdigit()
+    }
+    requested_sources = {
+        int(value) for value in (source_ids or []) if str(value).isdigit()
+    }
+    requested_evidence = {
+        str(value)
+        for value in (evidence_keys or [])
+        if re.fullmatch(r"(?:experiment|summary|key_idea):\d+", str(value))
+    }
+    conn = get_connection()
+    manuscript_exists = conn.execute(
+        "SELECT 1 FROM manuscripts WHERE id = ?",
+        (manuscript_id,),
+    ).fetchone()
+
+    if not manuscript_exists:
+        conn.close()
+        raise ValueError("The manuscript no longer exists.")
+
+    allowed_sections = {
+        row["id"]
+        for row in conn.execute(
+            "SELECT id FROM manuscript_sections WHERE manuscript_id = ?",
+            (manuscript_id,),
+        ).fetchall()
+    }
+    allowed_sources = {
+        row["library_item_id"]
+        for row in conn.execute(
+            "SELECT library_item_id FROM manuscript_sources WHERE manuscript_id = ?",
+            (manuscript_id,),
+        ).fetchall()
+    }
+    allowed_evidence = {
+        f"{row['evidence_type']}:{row['evidence_id']}"
+        for row in conn.execute(
+            """
+            SELECT evidence_type, evidence_id
+            FROM manuscript_evidence
+            WHERE manuscript_id = ?
+            """,
+            (manuscript_id,),
+        ).fetchall()
+    }
+    normalized_sections = sorted(requested_sections & allowed_sections)
+    normalized_sources = sorted(requested_sources & allowed_sources)
+    normalized_evidence = sorted(requested_evidence & allowed_evidence)
+
+    with conn:
+        conn.execute(
+            """
+            INSERT INTO manuscript_ai_contexts (
+                manuscript_id,
+                context_mode,
+                section_ids_json,
+                source_ids_json,
+                evidence_keys_json,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(manuscript_id) DO UPDATE SET
+                context_mode = excluded.context_mode,
+                section_ids_json = excluded.section_ids_json,
+                source_ids_json = excluded.source_ids_json,
+                evidence_keys_json = excluded.evidence_keys_json,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (
+                manuscript_id,
+                context_mode,
+                json.dumps(normalized_sections),
+                json.dumps(normalized_sources),
+                json.dumps(normalized_evidence),
+            ),
+        )
+
+    conn.close()
+    return get_manuscript_ai_context(manuscript_id)
+
+
 def attach_manuscript_evidence(
     manuscript_id: int,
     evidence_type: str,
@@ -773,6 +1343,13 @@ def _snapshot_for_manuscript(conn, manuscript_id: int) -> dict:
         """,
         (manuscript_id,),
     ).fetchall()
+    assets = conn.execute(
+        """
+        SELECT * FROM manuscript_assets
+        WHERE manuscript_id = ? ORDER BY section_id, sort_order, id
+        """,
+        (manuscript_id,),
+    ).fetchall()
     return {
         "manuscript": {
             "title": manuscript["title"],
@@ -783,6 +1360,7 @@ def _snapshot_for_manuscript(conn, manuscript_id: int) -> dict:
         "sources": [dict(row) for row in sources],
         "evidence": [dict(row) for row in evidence],
         "citations": [dict(row) for row in citations],
+        "assets": [dict(row) for row in assets],
     }
 
 
@@ -932,6 +1510,72 @@ def _apply_snapshot(conn, manuscript_id: int, snapshot: dict, *, title_override=
                     source.get("citation_key") or "source",
                     source.get("notes"),
                 ),
+            )
+
+    asset_id_map = {}
+
+    for asset in snapshot.get("assets", []):
+        new_section_id = section_id_map.get(asset.get("section_id"))
+
+        if not new_section_id or asset.get("asset_type") not in MANUSCRIPT_ASSET_TYPES:
+            continue
+
+        cur = conn.execute(
+            """
+            INSERT INTO manuscript_assets (
+                manuscript_id,
+                section_id,
+                asset_type,
+                caption,
+                alt_text,
+                original_filename,
+                storage_path,
+                mime_type,
+                content_json,
+                sort_order
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                manuscript_id,
+                new_section_id,
+                asset.get("asset_type"),
+                asset.get("caption") or "Untitled object",
+                asset.get("alt_text"),
+                asset.get("original_filename"),
+                asset.get("storage_path"),
+                asset.get("mime_type"),
+                asset.get("content_json") or "{}",
+                asset.get("sort_order") or 0,
+            ),
+        )
+        asset_id_map[asset.get("id")] = cur.lastrowid
+
+    if asset_id_map:
+        restored_sections = conn.execute(
+            """
+            SELECT id, content_md FROM manuscript_sections
+            WHERE manuscript_id = ?
+            """,
+            (manuscript_id,),
+        ).fetchall()
+
+        for section in restored_sections:
+            content = section["content_md"] or ""
+
+            for old_id, new_id in asset_id_map.items():
+                content = re.sub(
+                    rf"\[\[(figure|table|equation):{int(old_id)}\]\]",
+                    lambda match: manuscript_asset_reference_token(
+                        match.group(1),
+                        new_id,
+                    ),
+                    content,
+                )
+
+            conn.execute(
+                "UPDATE manuscript_sections SET content_md = ? WHERE id = ?",
+                (content, section["id"]),
             )
 
     for evidence in snapshot.get("evidence", []):

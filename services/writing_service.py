@@ -48,14 +48,28 @@ def build_writing_prompt(
     sections,
     sources,
     evidence,
+    context_mode: str = "Current section",
+    context_sections=None,
 ) -> str:
     outline = [
         {
+            "section_id": row["id"],
             "title": row["title"],
             "section_type": row["section_type"],
-            "content_excerpt": str(row["content_md"] or "")[:700],
         }
         for row in sections
+    ]
+    selected_context_sections = list(
+        context_sections if context_sections is not None else sections
+    )[:16]
+    context_section_payload = [
+        {
+            "section_id": row["id"],
+            "title": row["title"],
+            "section_type": row["section_type"],
+            "content": str(row["content_md"] or "")[:6000],
+        }
+        for row in selected_context_sections
     ]
     return f"""
 PAPER_WRITING_REQUEST
@@ -67,6 +81,7 @@ is explicitly included below.
 
 MODE: {mode}
 USER_INSTRUCTION: {instruction.strip() or "Improve the selected section."}
+CONTEXT_SCOPE: {context_mode}
 
 MANUSCRIPT_JSON:
 {json.dumps(_row_dict(manuscript), ensure_ascii=False, default=str)}
@@ -76,6 +91,9 @@ SELECTED_SECTION_JSON:
 
 OUTLINE_JSON:
 {json.dumps(outline, ensure_ascii=False)}
+
+SELECTED_CONTEXT_SECTIONS_JSON:
+{json.dumps(context_section_payload, ensure_ascii=False)}
 
 ATTACHED_BIBLIOGRAPHIC_SOURCES_JSON:
 {json.dumps(_source_payload(sources), ensure_ascii=False, default=str)}
@@ -107,6 +125,8 @@ Return STRICT JSON with this structure:
 
 Rules:
 - Match the language and scientific tone of the selected section.
+- Use only the sections listed in SELECTED_CONTEXT_SECTIONS_JSON as additional
+  manuscript context. The outline titles are structural orientation, not evidence.
 - Never invent measurements, methods, findings, authors, citations, or DOI data.
 - Use citation tokens only in the exact form [@citation_key] and only with keys
   listed in ATTACHED_BIBLIOGRAPHIC_SOURCES_JSON.
@@ -179,6 +199,8 @@ def generate_writing_suggestion(
     sections,
     sources,
     evidence,
+    context_mode: str = "Current section",
+    context_sections=None,
     ai_provider=None,
 ) -> dict:
     if mode not in WRITING_MODES:
@@ -200,10 +222,24 @@ def generate_writing_suggestion(
             sections=sections,
             sources=sources,
             evidence=evidence,
+            context_mode=context_mode,
+            context_sections=context_sections,
         )
     )
 
     if not isinstance(result, dict):
         raise ValueError("AI returned an invalid writing response.")
 
-    return _normalize_result(result, str(section["content_md"] or ""))
+    normalized = _normalize_result(result, str(section["content_md"] or ""))
+    normalized["context_used"] = {
+        "mode": context_mode,
+        "section_ids": [
+            row["id"]
+            for row in list(context_sections if context_sections is not None else sections)
+        ],
+        "source_ids": [row["library_item_id"] for row in sources],
+        "evidence_keys": [
+            f"{row['evidence_type']}:{row['evidence_id']}" for row in evidence
+        ],
+    }
+    return normalized
