@@ -10,6 +10,13 @@ from ai.factory import get_ai_provider
 from services.summary_service import format_messages_for_ai
 
 
+def _string_list(value) -> list[str]:
+    if not isinstance(value, list):
+        return []
+
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
 def format_ideas_for_ai(ideas) -> str:
     if not ideas:
         return "Nu există idei principale extrase încă."
@@ -110,9 +117,9 @@ Reguli:
         }
 
     return {
-        "research_topic": data.get("research_topic", ""),
-        "short_description": data.get("short_description", ""),
-        "keywords": data.get("keywords", []),
-        "search_queries": data.get("search_queries", []),
-        "exclude_terms": data.get("exclude_terms", [])
+        "research_topic": str(data.get("research_topic") or "").strip(),
+        "short_description": str(data.get("short_description") or "").strip(),
+        "keywords": _string_list(data.get("keywords")),
+        "search_queries": _string_list(data.get("search_queries")),
+        "exclude_terms": _string_list(data.get("exclude_terms")),
     }

@@ -269,6 +269,63 @@ def delete_message(message_id: int):
     conn.commit()
     conn.close()
 
+
+#----------------------- EXPERIMENT AI CHAT ----------------------------
+
+def add_experiment_ai_message(chat_id: int, role: str, content: str) -> int:
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        INSERT INTO experiment_ai_messages (chat_id, role, content)
+        VALUES (?, ?, ?)
+        """,
+        (chat_id, role, content)
+    )
+
+    message_id = cur.lastrowid
+
+    conn.commit()
+    conn.close()
+
+    return message_id
+
+
+def get_experiment_ai_messages(chat_id: int):
+    conn = get_connection()
+
+    messages = conn.execute(
+        """
+        SELECT *
+        FROM experiment_ai_messages
+        WHERE chat_id = ?
+        ORDER BY created_at ASC, id ASC
+        """,
+        (chat_id,)
+    ).fetchall()
+
+    conn.close()
+
+    return messages
+
+
+def clear_experiment_ai_messages(chat_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        DELETE FROM experiment_ai_messages
+        WHERE chat_id = ?
+        """,
+        (chat_id,)
+    )
+
+    conn.commit()
+    conn.close()
+
+
 #----------------------- AI ----------------------------
 
 def get_project_messages(project_id: int):
@@ -296,20 +353,100 @@ def save_summary(
     scope: str,
     content: str,
     project_id: int | None = None,
-    chat_id: int | None = None
+    chat_id: int | None = None,
+    summary_style: str = "Standard cercetare",
 ) -> int:
+    if scope not in {"project", "chat"}:
+        raise ValueError("Summary scope must be 'project' or 'chat'.")
+
+    if scope == "project" and project_id is None:
+        raise ValueError("project_id is required for a project summary.")
+
+    if scope == "chat" and chat_id is None:
+        raise ValueError("chat_id is required for an experiment summary.")
+
+    summary_style = summary_style.strip() or "Standard cercetare"
     conn = get_connection()
     cur = conn.cursor()
 
-    cur.execute(
-        """
-        INSERT INTO summaries (scope, project_id, chat_id, content)
-        VALUES (?, ?, ?, ?)
-        """,
-        (scope, project_id, chat_id, content)
-    )
+    if scope == "project":
+        existing = cur.execute(
+            """
+            SELECT id
+            FROM summaries
+            WHERE scope = 'project'
+              AND project_id = ?
+              AND summary_style = ?
+            """,
+            (project_id, summary_style),
+        ).fetchone()
 
-    summary_id = cur.lastrowid
+        if existing:
+            summary_id = existing["id"]
+            cur.execute(
+                """
+                UPDATE summaries
+                SET content = ?,
+                    chat_id = NULL,
+                    created_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (content, summary_id),
+            )
+        else:
+            cur.execute(
+                """
+                INSERT INTO summaries (
+                    scope,
+                    project_id,
+                    chat_id,
+                    summary_style,
+                    content
+                )
+                VALUES ('project', ?, NULL, ?, ?)
+                """,
+                (project_id, summary_style, content),
+            )
+            summary_id = cur.lastrowid
+    else:
+        existing = cur.execute(
+            """
+            SELECT id
+            FROM summaries
+            WHERE scope = 'chat'
+              AND chat_id = ?
+              AND summary_style = ?
+            """,
+            (chat_id, summary_style),
+        ).fetchone()
+
+        if existing:
+            summary_id = existing["id"]
+            cur.execute(
+                """
+                UPDATE summaries
+                SET content = ?,
+                    project_id = ?,
+                    created_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (content, project_id, summary_id),
+            )
+        else:
+            cur.execute(
+                """
+                INSERT INTO summaries (
+                    scope,
+                    project_id,
+                    chat_id,
+                    summary_style,
+                    content
+                )
+                VALUES ('chat', ?, ?, ?, ?)
+                """,
+                (project_id, chat_id, summary_style, content),
+            )
+            summary_id = cur.lastrowid
 
     conn.commit()
     conn.close()
@@ -317,17 +454,23 @@ def save_summary(
     return summary_id
 
 
-def get_chat_summaries(chat_id: int):
+def get_chat_summaries(chat_id: int, summary_style: str | None = None):
     conn = get_connection()
+    params = [chat_id]
+    style_filter = ""
+
+    if summary_style is not None:
+        style_filter = " AND summary_style = ?"
+        params.append(summary_style)
 
     summaries = conn.execute(
-        """
+        f"""
         SELECT *
         FROM summaries
-        WHERE scope = 'chat' AND chat_id = ?
-        ORDER BY created_at DESC
+        WHERE scope = 'chat' AND chat_id = ?{style_filter}
+        ORDER BY created_at DESC, id DESC
         """,
-        (chat_id,)
+        params,
     ).fetchall()
 
     conn.close()
@@ -335,22 +478,64 @@ def get_chat_summaries(chat_id: int):
     return summaries
 
 
-def get_project_summaries(project_id: int):
+def get_chat_summary(chat_id: int, summary_style: str):
     conn = get_connection()
-
-    summaries = conn.execute(
+    summary = conn.execute(
         """
         SELECT *
         FROM summaries
-        WHERE scope = 'project' AND project_id = ?
-        ORDER BY created_at DESC
+        WHERE scope = 'chat'
+          AND chat_id = ?
+          AND summary_style = ?
+        LIMIT 1
         """,
-        (project_id,)
+        (chat_id, summary_style),
+    ).fetchone()
+    conn.close()
+
+    return summary
+
+
+def get_project_summaries(project_id: int, summary_style: str | None = None):
+    conn = get_connection()
+    params = [project_id]
+    style_filter = ""
+
+    if summary_style is not None:
+        style_filter = " AND summary_style = ?"
+        params.append(summary_style)
+
+    summaries = conn.execute(
+        f"""
+        SELECT *
+        FROM summaries
+        WHERE scope = 'project' AND project_id = ?{style_filter}
+        ORDER BY created_at DESC, id DESC
+        """,
+        params,
     ).fetchall()
 
     conn.close()
 
     return summaries
+
+
+def get_project_summary(project_id: int, summary_style: str):
+    conn = get_connection()
+    summary = conn.execute(
+        """
+        SELECT *
+        FROM summaries
+        WHERE scope = 'project'
+          AND project_id = ?
+          AND summary_style = ?
+        LIMIT 1
+        """,
+        (project_id, summary_style),
+    ).fetchone()
+    conn.close()
+
+    return summary
 
 
 def delete_project_ideas(project_id: int):
@@ -439,11 +624,27 @@ def clear_project_mindmap(project_id: int):
         (project_id,)
     )
 
+    cur.execute(
+        """
+        DELETE FROM mindmap_source_state
+        WHERE project_id = ?
+        """,
+        (project_id,)
+    )
+
     conn.commit()
     conn.close()
 
 
 def save_project_mindmap(project_id: int, mindmap_data: dict):
+    merge_project_mindmap(project_id, mindmap_data)
+
+
+def merge_project_mindmap(
+    project_id: int,
+    mindmap_data: dict,
+    processed_sources: list[dict] | None = None,
+):
     conn = get_connection()
     cur = conn.cursor()
 
@@ -451,9 +652,14 @@ def save_project_mindmap(project_id: int, mindmap_data: dict):
     edges = mindmap_data.get("edges", [])
 
     for node in nodes:
+        node_key = str(node.get("id") or "").strip()
+
+        if not node_key:
+            continue
+
         cur.execute(
             """
-            INSERT OR REPLACE INTO mindmap_nodes (
+            INSERT INTO mindmap_nodes (
                 project_id,
                 node_key,
                 label,
@@ -461,10 +667,14 @@ def save_project_mindmap(project_id: int, mindmap_data: dict):
                 importance
             )
             VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(project_id, node_key) DO UPDATE SET
+                label = excluded.label,
+                description = excluded.description,
+                importance = excluded.importance
             """,
             (
                 project_id,
-                node.get("id", ""),
+                node_key,
                 node.get("label", ""),
                 node.get("description", ""),
                 node.get("importance", "medium")
@@ -472,6 +682,13 @@ def save_project_mindmap(project_id: int, mindmap_data: dict):
         )
 
     for edge in edges:
+        source_key = str(edge.get("source") or "").strip()
+        target_key = str(edge.get("target") or "").strip()
+        relation = str(edge.get("relation") or "").strip()
+
+        if not source_key or not target_key or source_key == target_key:
+            continue
+
         cur.execute(
             """
             INSERT INTO mindmap_edges (
@@ -480,18 +697,88 @@ def save_project_mindmap(project_id: int, mindmap_data: dict):
                 target_key,
                 relation
             )
-            VALUES (?, ?, ?, ?)
+            SELECT ?, ?, ?, ?
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM mindmap_edges
+                WHERE project_id = ?
+                  AND source_key = ?
+                  AND target_key = ?
+                  AND COALESCE(relation, '') = ?
+            )
             """,
             (
                 project_id,
-                edge.get("source", ""),
-                edge.get("target", ""),
-                edge.get("relation", "")
+                source_key,
+                target_key,
+                relation,
+                project_id,
+                source_key,
+                target_key,
+                relation,
+            )
+        )
+
+    for source in processed_sources or []:
+        cur.execute(
+            """
+            INSERT INTO mindmap_source_state (
+                project_id,
+                source_type,
+                source_id,
+                content_hash,
+                processed_at
+            )
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(project_id, source_type, source_id) DO UPDATE SET
+                content_hash = excluded.content_hash,
+                processed_at = CURRENT_TIMESTAMP
+            """,
+            (
+                project_id,
+                source["source_type"],
+                source["source_id"],
+                source["content_hash"],
             )
         )
 
     conn.commit()
     conn.close()
+
+
+def get_mindmap_source_states(project_id: int):
+    conn = get_connection()
+
+    states = conn.execute(
+        """
+        SELECT *
+        FROM mindmap_source_state
+        WHERE project_id = ?
+        ORDER BY processed_at ASC, id ASC
+        """,
+        (project_id,)
+    ).fetchall()
+
+    conn.close()
+
+    return states
+
+
+def get_mindmap_last_sync(project_id: int):
+    conn = get_connection()
+
+    row = conn.execute(
+        """
+        SELECT MAX(processed_at) AS processed_at
+        FROM mindmap_source_state
+        WHERE project_id = ?
+        """,
+        (project_id,)
+    ).fetchone()
+
+    conn.close()
+
+    return row["processed_at"] if row else None
 
 
 def get_mindmap_nodes(project_id: int):
@@ -554,7 +841,8 @@ def update_summary(summary_id: int, new_content: str):
     cur.execute(
         """
         UPDATE summaries
-        SET content = ?
+        SET content = ?,
+            created_at = CURRENT_TIMESTAMP
         WHERE id = ?
         """,
         (new_content, summary_id)

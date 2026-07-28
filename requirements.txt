@@ -4,3 +4,7 @@ faster-whisper
 google-genai
 streamlit-agraph
 requests
+python-docx
+reportlab
+Pillow
+matplotlib
