@@ -64,6 +64,7 @@ from services.transcription_service import (
     save_audio_file,
     transcribe_audio,
 )
+from utils.auth import require_auth
 from utils.ui import (
     chat_message,
     compact_date,
@@ -83,6 +84,7 @@ st.set_page_config(
     layout="wide",
 )
 
+require_auth()
 init_db()
 load_css()
 

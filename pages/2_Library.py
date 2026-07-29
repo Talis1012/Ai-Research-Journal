@@ -41,6 +41,7 @@ from services.library_service import (
     save_library_upload,
 )
 from services.openalex_service import search_works_for_queries
+from utils.auth import require_auth
 from utils.ui import (
     chat_message,
     compact_date,
@@ -59,6 +60,7 @@ st.set_page_config(
     layout="wide",
 )
 
+require_auth()
 init_db()
 load_css()
 

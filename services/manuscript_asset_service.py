@@ -6,15 +6,17 @@ from uuid import uuid4
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
+from utils.user_scope import scoped_path
+
 
 MAX_FIGURE_FILE_SIZE = 25 * 1024 * 1024
 MAX_FIGURE_PIXELS = 50_000_000
 
 
 def get_manuscript_asset_storage_path() -> Path:
-    storage_path = Path(
+    storage_path = scoped_path(
         os.getenv("MANUSCRIPT_ASSET_STORAGE_PATH", "data/manuscript_assets")
-    ).expanduser()
+    )
     storage_path.mkdir(parents=True, exist_ok=True)
     return storage_path
 

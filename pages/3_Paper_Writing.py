@@ -79,6 +79,7 @@ from services.manuscript_review_service import (
     run_manuscript_checks,
     template_rules,
 )
+from utils.auth import require_auth
 from utils.markdown_toolbar import render_markdown_toolbar
 from utils.ui import (
     compact_date,
@@ -97,6 +98,7 @@ st.set_page_config(
     layout="wide",
 )
 
+require_auth()
 init_db()
 load_css()
 

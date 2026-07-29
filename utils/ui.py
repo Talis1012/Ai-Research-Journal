@@ -5,6 +5,8 @@ from textwrap import dedent
 
 import streamlit as st
 
+from utils.auth import current_user_profile, logout
+
 
 def safe_html(value) -> str:
     return html.escape(str(value or ""))
@@ -1646,19 +1648,37 @@ def sidebar_nav(active_page: str = "experiments"):
 
 
 def header_icons():
-    render_html(
-        """
-        <div class="header-icons">
-            <span class="icon-help" aria-hidden="true"></span>
-            <span class="icon-bell" aria-hidden="true"><span class="notification-dot">3</span></span>
-            <span class="user-chip">
-                <span class="avatar-photo"></span>
-                <span>Dr. Alex Morgan</span>
-                <span style="color:#667085;">⌄</span>
-            </span>
-        </div>
-        """
-    )
+    profile = current_user_profile()
+    icon_col, account_col = st.columns([0.32, 0.68], gap="small")
+
+    with icon_col:
+        render_html(
+            """
+            <div class="header-icons">
+                <span class="icon-help" aria-hidden="true"></span>
+                <span class="icon-bell" aria-hidden="true"></span>
+            </div>
+            """
+        )
+
+    with account_col:
+        with st.popover(
+            profile["name"],
+            icon=":material/account_circle:",
+            width="stretch",
+        ):
+            st.text(profile["name"])
+
+            if profile["email"]:
+                st.caption(profile["email"])
+
+            st.button(
+                "Deconectare",
+                icon=":material/logout:",
+                width="stretch",
+                on_click=logout,
+                key="auth_logout_button",
+            )
 
 
 def experiment_card(title: str, snippet: str, created_at: str, selected: bool = False, chat_id: int | None = None):

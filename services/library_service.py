@@ -4,6 +4,8 @@ import re
 from pathlib import Path
 from uuid import uuid4
 
+from utils.user_scope import scoped_path
+
 
 MAX_LIBRARY_FILE_SIZE = 25 * 1024 * 1024
 
@@ -31,9 +33,9 @@ _TYPE_BY_EXTENSION = {
 
 
 def get_library_storage_path() -> Path:
-    storage_path = Path(
+    storage_path = scoped_path(
         os.getenv("LIBRARY_STORAGE_PATH", "data/library")
-    ).expanduser()
+    )
     storage_path.mkdir(parents=True, exist_ok=True)
 
     return storage_path

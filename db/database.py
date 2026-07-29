@@ -4,12 +4,15 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from utils.user_scope import scoped_path
+
 
 load_dotenv()
 
 
 def get_db_path() -> str:
-    return os.getenv("DATABASE_PATH", "data/app.db")
+    base_path = os.getenv("DATABASE_PATH", "data/app.db")
+    return str(scoped_path(base_path))
 
 
 def get_connection():
