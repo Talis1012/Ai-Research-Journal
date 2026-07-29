@@ -1517,6 +1517,11 @@ def load_css():
             min-height: 88px !important;
         }
 
+        /* Streamlit renders this keyboard hint over the input value in forms. */
+        div[data-testid="stForm"] div[data-testid="InputInstructions"] {
+            display: none !important;
+        }
+
         .stButton > button,
         div[data-testid="stFormSubmitButton"] button {
             border-radius: 7px;
