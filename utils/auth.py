@@ -1,5 +1,6 @@
 import math
 import time
+from functools import wraps
 
 import streamlit as st
 
@@ -157,6 +158,23 @@ def require_auth() -> dict:
 
     activate_user_scope(issuer, subject)
     return claims
+
+
+def authenticated_callback(callback):
+    """Reactivate private storage before a Streamlit widget callback runs.
+
+    Streamlit executes widget callbacks before rerunning the page from the top,
+    so the page-level ``require_auth()`` has not populated the ContextVar yet.
+    Requiring auth here keeps every callback fail-closed while making the user
+    scope available to database and private-file operations.
+    """
+
+    @wraps(callback)
+    def wrapped(*args, **kwargs):
+        require_auth()
+        return callback(*args, **kwargs)
+
+    return wrapped
 
 
 def current_user_profile() -> dict:

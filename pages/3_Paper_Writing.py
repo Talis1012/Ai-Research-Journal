@@ -80,7 +80,7 @@ from services.manuscript_review_service import (
     run_manuscript_checks,
     template_rules,
 )
-from utils.auth import require_auth
+from utils.auth import authenticated_callback, require_auth
 from utils.content_safety import safe_external_url
 from utils.markdown_toolbar import render_markdown_toolbar
 from utils.ui import (
@@ -325,6 +325,7 @@ def _process_pending_editor_reset():
         st.session_state.pop(f"writing_section_title_{section_id}", None)
 
 
+@authenticated_callback
 def _autosave_section(section_id: int):
     content_key = f"writing_section_content_{section_id}"
     update_manuscript_section(
@@ -334,6 +335,7 @@ def _autosave_section(section_id: int):
     st.session_state["writing_last_saved_at"] = datetime.now().strftime("%H:%M:%S")
 
 
+@authenticated_callback
 def _autosave_section_title(section_id: int):
     title_key = f"writing_section_title_{section_id}"
     update_manuscript_section(
@@ -343,6 +345,7 @@ def _autosave_section_title(section_id: int):
     st.session_state["writing_last_saved_at"] = datetime.now().strftime("%H:%M:%S")
 
 
+@authenticated_callback
 def _save_manuscript_meta(manuscript_id: int):
     update_manuscript(
         manuscript_id,
@@ -353,6 +356,7 @@ def _save_manuscript_meta(manuscript_id: int):
     st.session_state["writing_last_saved_at"] = datetime.now().strftime("%H:%M:%S")
 
 
+@authenticated_callback
 def _create_export_version(manuscript_id: int, export_type: str):
     create_manuscript_version(
         manuscript_id,

@@ -24,7 +24,11 @@ from services.workspace_service import (
     current_user_workspace_roots,
     delete_current_user_workspace,
 )
-from utils.auth import InvalidIdentityError, validate_identity_claims
+from utils.auth import (
+    InvalidIdentityError,
+    authenticated_callback,
+    validate_identity_claims,
+)
 from utils.content_safety import safe_external_url, sanitize_untrusted_markdown
 from utils.prompts import UNTRUSTED_CONTENT_RULES, untrusted_data
 from utils.user_scope import activate_user_scope, clear_user_scope, scoped_path
@@ -201,6 +205,29 @@ class SecurityHardeningTestCase(unittest.TestCase):
             scoped_path(Path(self.temp_dir.name) / "private.db")
 
         activate_user_scope("https://issuer.example", "security-user")
+
+    def test_authenticated_callback_reactivates_private_storage_scope(self):
+        clear_user_scope()
+        private_path = Path(self.temp_dir.name) / "callback-private.db"
+
+        @authenticated_callback
+        def write_private_data():
+            return scoped_path(private_path)
+
+        claims = {
+            "iss": "https://issuer.example",
+            "sub": "callback-user",
+            "exp": 2_000,
+        }
+        with (
+            patch("utils.auth._user_claims", return_value=claims),
+            patch("utils.auth._is_logged_in", return_value=True),
+            patch("utils.auth.time.time", return_value=1_000),
+        ):
+            callback_path = write_private_data()
+
+        self.assertNotEqual(callback_path, private_path)
+        self.assertEqual(callback_path.name, private_path.name)
 
     def test_gemini_uses_a_system_instruction_and_output_cap(self):
         provider = GeminiProvider.__new__(GeminiProvider)
