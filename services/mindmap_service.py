@@ -1,4 +1,5 @@
 import hashlib
+import html
 import json
 
 from ai.factory import get_ai_provider
@@ -9,6 +10,7 @@ from db.queries import (
     merge_project_mindmap,
 )
 from services.summary_service import format_messages_for_ai
+from utils.prompts import UNTRUSTED_CONTENT_RULES, untrusted_data
 
 
 def normalize_node_id(text: str) -> str:
@@ -31,8 +33,13 @@ def normalize_node_id(text: str) -> str:
 
 
 def normalize_mindmap_data(data: dict, known_node_ids=None) -> dict:
+    if not isinstance(data, dict):
+        return {"nodes": [], "edges": []}
+
     raw_nodes = data.get("nodes", [])
     raw_edges = data.get("edges", [])
+    raw_nodes = raw_nodes if isinstance(raw_nodes, list) else []
+    raw_edges = raw_edges if isinstance(raw_edges, list) else []
 
     nodes = []
     used_ids = set()
@@ -42,7 +49,10 @@ def normalize_mindmap_data(data: dict, known_node_ids=None) -> dict:
         if node_id
     }
 
-    for index, node in enumerate(raw_nodes):
+    for index, node in enumerate(raw_nodes[:12]):
+        if not isinstance(node, dict):
+            continue
+
         raw_id = node.get("id") or node.get("label") or f"node_{index}"
         node_id = normalize_node_id(str(raw_id))
 
@@ -51,11 +61,14 @@ def normalize_mindmap_data(data: dict, known_node_ids=None) -> dict:
 
         used_ids.add(node_id)
 
+        importance = str(node.get("importance", "medium")).strip().lower()
         nodes.append({
             "id": node_id,
-            "label": node.get("label", node_id),
-            "description": node.get("description", ""),
-            "importance": node.get("importance", "medium")
+            "label": html.escape(str(node.get("label", node_id)).strip()[:120]),
+            "description": html.escape(
+                str(node.get("description", "")).strip()[:800]
+            ),
+            "importance": importance if importance in ("high", "medium", "low") else "medium",
         })
 
     valid_ids = known_ids | {node["id"] for node in nodes}
@@ -63,11 +76,14 @@ def normalize_mindmap_data(data: dict, known_node_ids=None) -> dict:
     edges = []
     used_edges = set()
 
-    for edge in raw_edges:
+    for edge in raw_edges[:36]:
+        if not isinstance(edge, dict):
+            continue
+
         source = normalize_node_id(str(edge.get("source", "")))
         target = normalize_node_id(str(edge.get("target", "")))
 
-        relation = str(edge.get("relation", "")).strip()
+        relation = html.escape(str(edge.get("relation", "")).strip()[:160])
         edge_key = (source, target, relation)
 
         if (
@@ -94,34 +110,24 @@ def generate_mindmap_for_project(project_name: str, messages, ideas=None) -> dic
 
     notes_text = format_messages_for_ai(messages)
 
-    ideas_text = ""
-
-    if ideas:
-        idea_parts = []
-
-        for idea in ideas:
-            idea_parts.append(
-                f"""
-Titlu idee: {idea['title']}
-Descriere: {idea['description']}
-Dovadă: {idea['evidence']}
-Importanță: {idea['importance']}
-"""
-            )
-
-        ideas_text = "\n---\n".join(idea_parts)
+    ideas_text = untrusted_data(
+        [dict(idea) for idea in list(ideas or [])[:30]],
+        "saved project ideas",
+    )
 
     prompt = f"""
 Ești un asistent AI care construiește un mindmap pentru un proiect de cercetare.
 
 Nume proiect:
-{project_name}
+{untrusted_data(project_name, "project name")}
 
 Idei principale deja extrase:
 {ideas_text}
 
 Notițe din proiect:
 {notes_text}
+
+{UNTRUSTED_CONTENT_RULES}
 
 Generează un mindmap în format JSON strict.
 
@@ -248,32 +254,17 @@ def get_pending_mindmap_signature(project_id: int, messages, ideas=None) -> str:
 
 
 def _format_incremental_sources(sources: list[dict]) -> str:
-    formatted = []
-
-    for source in sources:
-        payload = source["payload"]
-
-        if source["source_type"] == "message":
-            formatted.append(
-                "\n".join([
-                    f"Sursă: notiță #{source['source_id']}",
-                    f"Experiment: {payload['chat_title'] or 'Nespecificat'}",
-                    f"Tip: {payload['message_type']}",
-                    f"Conținut: {payload['content']}",
-                ])
-            )
-        else:
-            formatted.append(
-                "\n".join([
-                    f"Sursă: idee #{source['source_id']}",
-                    f"Titlu: {payload['title']}",
-                    f"Descriere: {payload['description']}",
-                    f"Dovadă: {payload['evidence']}",
-                    f"Importanță: {payload['importance']}",
-                ])
-            )
-
-    return "\n\n---\n\n".join(formatted)
+    return untrusted_data(
+        [
+            {
+                "source_type": source["source_type"],
+                "source_id": source["source_id"],
+                "payload": source["payload"],
+            }
+            for source in sources[:30]
+        ],
+        "new or modified research content",
+    )
 
 
 def _serialize_existing_mindmap(nodes, edges) -> dict:
@@ -309,20 +300,22 @@ def generate_mindmap_increment(
         existing_nodes,
         existing_edges,
     )
-    existing_json = json.dumps(existing_mindmap, ensure_ascii=False, indent=2)
+    existing_json = untrusted_data(existing_mindmap, "existing mind map")
     new_information = _format_incremental_sources(new_sources)
 
     prompt = f"""
 Ești un asistent AI care actualizează incremental un mindmap de cercetare.
 
 Nume proiect:
-{project_name}
+{untrusted_data(project_name, "project name")}
 
 Mindmap existent (trebuie păstrat):
 {existing_json}
 
 Informații noi sau modificate, încă neprocesate:
 {new_information}
+
+{UNTRUSTED_CONTENT_RULES}
 
 Returnează strict JSON cu DOAR diferența necesară:
 

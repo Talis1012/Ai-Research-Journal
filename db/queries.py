@@ -1,6 +1,42 @@
 from db.database import get_connection
 
 
+def _delete_project_files(*, audio_paths=(), asset_paths=(), manuscript_ids=()):
+    # These services pull in optional document/audio dependencies. Import them
+    # only for destructive cleanup, not for every ordinary project query.
+    from services.manuscript_asset_service import (
+        delete_manuscript_asset_directory,
+        delete_manuscript_asset_file,
+    )
+    from services.transcription_service import delete_audio_file
+
+    failures = []
+
+    for audio_path in sorted({str(path) for path in audio_paths if path}):
+        try:
+            delete_audio_file(audio_path)
+        except (OSError, ValueError):
+            failures.append(audio_path)
+
+    for asset_path in sorted({str(path) for path in asset_paths if path}):
+        try:
+            delete_manuscript_asset_file(asset_path)
+        except (OSError, ValueError):
+            failures.append(asset_path)
+
+    for manuscript_id in sorted({int(value) for value in manuscript_ids}):
+        try:
+            delete_manuscript_asset_directory(manuscript_id)
+        except (OSError, ValueError):
+            failures.append(f"manuscript:{manuscript_id}")
+
+    if failures:
+        raise RuntimeError(
+            "The database records were deleted, but one or more stored files "
+            "could not be removed."
+        )
+
+
 def create_project(name: str, domain: str, description: str = "") -> int:
     conn = get_connection()
     cur = conn.cursor()
@@ -939,6 +975,10 @@ def get_audio_file_paths_by_project(project_id: int):
 def delete_chat(chat_id: int):
     conn = get_connection()
     cur = conn.cursor()
+    audio_paths = conn.execute(
+        "SELECT file_path FROM audio_records WHERE chat_id = ?",
+        (chat_id,),
+    ).fetchall()
 
     cur.execute(
         """
@@ -950,11 +990,37 @@ def delete_chat(chat_id: int):
 
     conn.commit()
     conn.close()
+    _delete_project_files(
+        audio_paths=(row["file_path"] for row in audio_paths),
+    )
 
 
 def delete_project(project_id: int):
     conn = get_connection()
     cur = conn.cursor()
+    audio_paths = conn.execute(
+        """
+        SELECT audio_records.file_path
+        FROM audio_records
+        JOIN chats ON chats.id = audio_records.chat_id
+        WHERE chats.project_id = ?
+        """,
+        (project_id,),
+    ).fetchall()
+    asset_paths = conn.execute(
+        """
+        SELECT manuscript_assets.storage_path
+        FROM manuscript_assets
+        JOIN manuscripts ON manuscripts.id = manuscript_assets.manuscript_id
+        WHERE manuscripts.project_id = ?
+          AND manuscript_assets.storage_path IS NOT NULL
+        """,
+        (project_id,),
+    ).fetchall()
+    manuscript_ids = conn.execute(
+        "SELECT id FROM manuscripts WHERE project_id = ?",
+        (project_id,),
+    ).fetchall()
 
     cur.execute(
         """
@@ -966,6 +1032,11 @@ def delete_project(project_id: int):
 
     conn.commit()
     conn.close()
+    _delete_project_files(
+        audio_paths=(row["file_path"] for row in audio_paths),
+        asset_paths=(row["storage_path"] for row in asset_paths),
+        manuscript_ids=(row["id"] for row in manuscript_ids),
+    )
 
 
 def delete_summary(summary_id: int):

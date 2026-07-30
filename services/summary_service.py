@@ -1,4 +1,5 @@
 from ai.factory import get_ai_provider
+from utils.prompts import UNTRUSTED_CONTENT_RULES, untrusted_data, user_request
 
 
 SUMMARY_STYLE_STANDARD = "Standard cercetare"
@@ -102,24 +103,18 @@ Gemini va primi notițele reale ale proiectului și va încerca să respecte str
 
 
 def format_messages_for_ai(messages) -> str:
-    formatted_messages = []
+    payload = []
 
     for message in messages:
-        chat_title = ""
+        keys = message.keys() if hasattr(message, "keys") else ()
+        payload.append({
+            "experiment": message["chat_title"] if "chat_title" in keys else "",
+            "message_type": message["type"],
+            "created_at": message["created_at"],
+            "content": message["content"],
+        })
 
-        if "chat_title" in message.keys():
-            chat_title = f"[Experiment: {message['chat_title']}]\n"
-
-        formatted_message = f"""
-{chat_title}
-Tip mesaj: {message['type']}
-Data: {message['created_at']}
-Conținut:
-{message['content']}
-"""
-        formatted_messages.append(formatted_message)
-
-    return "\n---\n".join(formatted_messages)
+    return untrusted_data(payload, "research notes and transcripts")
 
 
 def build_chat_summary_prompt(
@@ -136,7 +131,7 @@ Ești un asistent AI pentru cercetare științifică.
 Ai primit notițele dintr-un singur experiment/chat.
 
 Titlu experiment:
-{chat_title}
+{untrusted_data(chat_title, "experiment title")}
 
 Notițe:
 {text}
@@ -195,7 +190,7 @@ Structură:
         structure = f"""
 Respectă următorul prompt personalizat scris de utilizator:
 
-{custom_prompt}
+{user_request(custom_prompt, "requested summary structure")}
 
 Dacă promptul personalizat cere informații care nu există în notițe, spune clar că nu sunt menționate.
 """
@@ -211,6 +206,8 @@ Realizează un rezumat clar și structurat al experimentului.
 {structure}
 
 {safety_rules}
+
+{UNTRUSTED_CONTENT_RULES}
 """
 
 
@@ -228,7 +225,7 @@ Ești un asistent AI pentru cercetare științifică.
 Ai primit toate notițele dintr-un proiect de cercetare.
 
 Nume proiect:
-{project_name}
+{untrusted_data(project_name, "project name")}
 
 Notițe din toate experimentele:
 {text}
@@ -292,7 +289,7 @@ Structură:
         structure = f"""
 Respectă următorul prompt personalizat scris de utilizator:
 
-{custom_prompt}
+{user_request(custom_prompt, "requested summary structure")}
 
 Dacă promptul personalizat cere informații care nu există în notițe, spune clar că nu sunt menționate.
 """
@@ -308,6 +305,8 @@ Realizează un rezumat clar și structurat al proiectului.
 {structure}
 
 {safety_rules}
+
+{UNTRUSTED_CONTENT_RULES}
 """
 
 
@@ -358,10 +357,12 @@ Ești un asistent AI pentru organizarea cercetării științifice.
 Ai primit toate notițele dintr-un proiect.
 
 Nume proiect:
-{project_name}
+{untrusted_data(project_name, "project name")}
 
 Notițe:
 {text}
+
+{UNTRUSTED_CONTENT_RULES}
 
 Extrage ideile principale ale proiectului.
 
@@ -393,10 +394,25 @@ Reguli:
 
     data = ai.generate_json(prompt)
 
-    if isinstance(data, dict):
-        return data.get("ideas", [])
+    raw_ideas = data.get("ideas", []) if isinstance(data, dict) else data
 
-    if isinstance(data, list):
-        return data
+    if not isinstance(raw_ideas, list):
+        return []
 
-    return []
+    ideas = []
+
+    for row in raw_ideas[:20]:
+        if not isinstance(row, dict):
+            continue
+
+        importance = str(row.get("importance") or "medium").strip().lower()
+        ideas.append({
+            "title": str(row.get("title") or "").strip()[:160],
+            "description": str(row.get("description") or "").strip()[:1200],
+            "evidence": str(row.get("evidence") or "").strip()[:1200],
+            "importance": (
+                importance if importance in ("high", "medium", "low") else "medium"
+            ),
+        })
+
+    return [idea for idea in ideas if idea["title"]]

@@ -1,6 +1,5 @@
-import json
-
 from ai.factory import get_ai_provider
+from utils.prompts import UNTRUSTED_CONTENT_RULES, untrusted_data, user_request
 
 
 WRITING_MODES = ("Draft", "Rewrite", "Cite", "Check claims")
@@ -80,26 +79,29 @@ metadata/abstracts. You do not have access to full papers unless their content
 is explicitly included below.
 
 MODE: {mode}
-USER_INSTRUCTION: {instruction.strip() or "Improve the selected section."}
+USER_INSTRUCTION:
+{user_request(instruction.strip() or "Improve the selected section.", "writing instruction")}
 CONTEXT_SCOPE: {context_mode}
 
 MANUSCRIPT_JSON:
-{json.dumps(_row_dict(manuscript), ensure_ascii=False, default=str)}
+{untrusted_data(_row_dict(manuscript), "manuscript metadata")}
 
 SELECTED_SECTION_JSON:
-{json.dumps(_row_dict(section), ensure_ascii=False, default=str)}
+{untrusted_data(_row_dict(section), "selected manuscript section")}
 
 OUTLINE_JSON:
-{json.dumps(outline, ensure_ascii=False)}
+{untrusted_data(outline, "manuscript outline")}
 
 SELECTED_CONTEXT_SECTIONS_JSON:
-{json.dumps(context_section_payload, ensure_ascii=False)}
+{untrusted_data(context_section_payload, "selected manuscript context")}
 
 ATTACHED_BIBLIOGRAPHIC_SOURCES_JSON:
-{json.dumps(_source_payload(sources), ensure_ascii=False, default=str)}
+{untrusted_data(_source_payload(sources), "external bibliographic metadata and abstracts")}
 
 PINNED_PROJECT_EVIDENCE_JSON:
-{json.dumps(_evidence_payload(evidence), ensure_ascii=False, default=str)}
+{untrusted_data(_evidence_payload(evidence), "pinned project evidence")}
+
+{UNTRUSTED_CONTENT_RULES}
 
 Return STRICT JSON with this structure:
 {{

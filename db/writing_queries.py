@@ -2,8 +2,13 @@ import json
 import re
 import unicodedata
 from datetime import datetime
+from pathlib import Path
 
 from db.database import get_connection
+from services.manuscript_asset_service import (
+    delete_manuscript_asset_directory,
+    delete_manuscript_asset_file,
+)
 
 
 MANUSCRIPT_STATUSES = ("Draft", "In review", "Final")
@@ -28,6 +33,26 @@ DEFAULT_SUBMISSION_CHECKLIST = {
     "figures_verified": False,
     "supplementary_files": False,
 }
+
+
+class StoredFileCleanupError(RuntimeError):
+    pass
+
+
+def _delete_manuscript_files(paths):
+    failures = []
+
+    for storage_path in sorted({str(path) for path in paths if path}):
+        try:
+            delete_manuscript_asset_file(storage_path)
+        except (OSError, ValueError):
+            failures.append(storage_path)
+
+    if failures:
+        raise StoredFileCleanupError(
+            "The database records were deleted, but one or more figure files "
+            "could not be removed."
+        )
 
 
 def manuscript_word_count(sections) -> int:
@@ -344,9 +369,18 @@ def update_manuscript_submission_profile(
 
 def delete_manuscript(manuscript_id: int):
     conn = get_connection()
+    files = conn.execute(
+        """
+        SELECT storage_path FROM manuscript_assets
+        WHERE manuscript_id = ? AND storage_path IS NOT NULL
+        """,
+        (manuscript_id,),
+    ).fetchall()
     conn.execute("DELETE FROM manuscripts WHERE id = ?", (manuscript_id,))
     conn.commit()
     conn.close()
+    _delete_manuscript_files(row["storage_path"] for row in files)
+    delete_manuscript_asset_directory(manuscript_id)
 
 
 def get_manuscript_sections(manuscript_id: int):
@@ -458,7 +492,7 @@ def delete_manuscript_section(section_id: int):
     with conn:
         removed_assets = conn.execute(
             """
-            SELECT id, asset_type FROM manuscript_assets
+            SELECT id, asset_type, storage_path FROM manuscript_assets
             WHERE section_id = ?
             """,
             (section_id,),
@@ -503,6 +537,7 @@ def delete_manuscript_section(section_id: int):
         )
 
     conn.close()
+    _delete_manuscript_files(asset["storage_path"] for asset in removed_assets)
 
 
 def move_manuscript_section(section_id: int, direction: int):
@@ -737,6 +772,9 @@ def update_manuscript_asset(
 
     conn.close()
 
+    if asset.get("storage_path") and asset.get("storage_path") != storage_path:
+        _delete_manuscript_files([asset["storage_path"]])
+
 
 def move_manuscript_asset(asset_id: int, direction: int):
     asset = get_manuscript_asset(asset_id)
@@ -812,6 +850,7 @@ def delete_manuscript_asset(asset_id: int):
         )
 
     conn.close()
+    _delete_manuscript_files([asset.get("storage_path")])
 
 
 def insert_manuscript_asset_reference(
@@ -1687,6 +1726,22 @@ def get_manuscript_version_comments(version_id: int):
 
 
 def _apply_snapshot(conn, manuscript_id: int, snapshot: dict, *, title_override=None):
+    current_paths = {
+        row["storage_path"]
+        for row in conn.execute(
+            """
+            SELECT storage_path FROM manuscript_assets
+            WHERE manuscript_id = ? AND storage_path IS NOT NULL
+            """,
+            (manuscript_id,),
+        ).fetchall()
+        if row["storage_path"]
+    }
+    restored_paths = {
+        str(asset.get("storage_path"))
+        for asset in snapshot.get("assets", [])
+        if asset.get("storage_path")
+    }
     metadata = snapshot.get("manuscript", {})
     title = title_override or metadata.get("title") or "Untitled manuscript"
     status = metadata.get("status") if metadata.get("status") in MANUSCRIPT_STATUSES else "Draft"
@@ -1761,11 +1816,19 @@ def _apply_snapshot(conn, manuscript_id: int, snapshot: dict, *, title_override=
             )
 
     asset_id_map = {}
+    skipped_asset_ids = set()
 
     for asset in snapshot.get("assets", []):
         new_section_id = section_id_map.get(asset.get("section_id"))
 
         if not new_section_id or asset.get("asset_type") not in MANUSCRIPT_ASSET_TYPES:
+            continue
+
+        if asset.get("asset_type") == "figure" and not Path(
+            str(asset.get("storage_path") or "")
+        ).is_file():
+            if asset.get("id") is not None:
+                skipped_asset_ids.add(asset.get("id"))
             continue
 
         cur = conn.execute(
@@ -1799,7 +1862,7 @@ def _apply_snapshot(conn, manuscript_id: int, snapshot: dict, *, title_override=
         )
         asset_id_map[asset.get("id")] = cur.lastrowid
 
-    if asset_id_map:
+    if asset_id_map or skipped_asset_ids:
         restored_sections = conn.execute(
             """
             SELECT id, content_md FROM manuscript_sections
@@ -1820,6 +1883,13 @@ def _apply_snapshot(conn, manuscript_id: int, snapshot: dict, *, title_override=
                     ),
                     content,
                 )
+
+            for old_id in skipped_asset_ids:
+                content = re.sub(
+                    rf"\s*\[\[figure:{int(old_id)}\]\]\s*",
+                    " ",
+                    content,
+                ).strip()
 
             conn.execute(
                 "UPDATE manuscript_sections SET content_md = ? WHERE id = ?",
@@ -1928,6 +1998,8 @@ def _apply_snapshot(conn, manuscript_id: int, snapshot: dict, *, title_override=
             ),
         )
 
+    return current_paths - restored_paths
+
 
 def restore_manuscript_version(version_id: int):
     version = get_manuscript_version(version_id)
@@ -1938,9 +2010,14 @@ def restore_manuscript_version(version_id: int):
     conn = get_connection()
 
     with conn:
-        _apply_snapshot(conn, version["manuscript_id"], version["snapshot"])
+        obsolete_paths = _apply_snapshot(
+            conn,
+            version["manuscript_id"],
+            version["snapshot"],
+        )
 
     conn.close()
+    _delete_manuscript_files(obsolete_paths)
 
 
 def restore_manuscript_section_from_version(

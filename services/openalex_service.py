@@ -4,6 +4,11 @@ import requests
 from dotenv import load_dotenv
 
 from db.library_queries import normalize_doi, normalize_openalex_id
+from services.resource_limits import (
+    concurrency_slot,
+    consume_rate_limit,
+    env_int,
+)
 
 
 load_dotenv()
@@ -141,16 +146,20 @@ def search_works(
     sort: str = "relevance",
     page: int = 1,
 ):
-    normalized_query = query.strip()
+    normalized_query = str(query or "").strip()
 
     if not normalized_query:
         raise ValueError("Search query cannot be empty.")
 
-    if len(normalized_query) > 1000:
+    if len(normalized_query) > env_int(
+        "OPENALEX_MAX_QUERY_CHARS",
+        300,
+        maximum=1000,
+    ):
         raise ValueError("Search query is too long for OpenAlex.")
 
-    per_page = max(1, min(int(per_page), 50))
-    page = max(1, int(page))
+    per_page = max(1, min(int(per_page), 25))
+    page = max(1, min(int(page), 100))
     params = {
         "search": normalized_query,
         "per_page": per_page,
@@ -188,16 +197,49 @@ def search_works(
 
     params.update(get_auth_params())
 
-    try:
-        response = requests.get(
-            f"{OPENALEX_BASE_URL}/works",
-            params=params,
-            timeout=25,
-        )
-    except requests.Timeout as exc:
-        raise RuntimeError("OpenAlex took too long to respond.") from exc
-    except requests.RequestException as exc:
-        raise RuntimeError("Could not connect to OpenAlex.") from exc
+    consume_rate_limit(
+        "OpenAlex",
+        per_user_hour=env_int(
+            "OPENALEX_REQUESTS_PER_USER_HOUR",
+            120,
+            maximum=5000,
+        ),
+        per_user_day=env_int(
+            "OPENALEX_REQUESTS_PER_USER_DAY",
+            500,
+            maximum=50000,
+        ),
+        global_per_minute=env_int(
+            "OPENALEX_GLOBAL_REQUESTS_PER_MINUTE",
+            120,
+            maximum=10000,
+        ),
+        global_per_day=env_int(
+            "OPENALEX_GLOBAL_REQUESTS_PER_DAY",
+            5000,
+            maximum=500000,
+        ),
+    )
+
+    with concurrency_slot(
+        "OpenAlex",
+        global_limit=env_int(
+            "OPENALEX_MAX_CONCURRENT_REQUESTS",
+            8,
+            maximum=100,
+        ),
+        lease_seconds=40,
+    ):
+        try:
+            response = requests.get(
+                f"{OPENALEX_BASE_URL}/works",
+                params=params,
+                timeout=15,
+            )
+        except requests.Timeout as exc:
+            raise RuntimeError("OpenAlex took too long to respond.") from exc
+        except requests.RequestException as exc:
+            raise RuntimeError("Could not connect to OpenAlex.") from exc
 
     if not response.ok:
         _raise_openalex_error(response)
@@ -248,14 +290,22 @@ def search_works_for_queries(
 ):
     results_by_key = {}
     normalized_queries = []
+    max_queries = env_int("OPENALEX_MAX_QUERIES_PER_SEARCH", 5, maximum=20)
 
     for raw_query in queries:
-        query = raw_query.strip()
+        query = str(raw_query or "").strip()
 
         if not query or query in normalized_queries:
             continue
 
         normalized_queries.append(query)
+
+        if len(normalized_queries) > max_queries:
+            raise ValueError(
+                f"A single search can contain at most {max_queries} unique queries."
+            )
+
+    for query in normalized_queries:
         data = search_works(
             query=query,
             per_page=per_page,
@@ -280,7 +330,11 @@ def search_works_for_queries(
             work["matched_query"] = query
             results_by_key[unique_key] = work
 
-    excluded = [term.casefold().strip() for term in (exclude_terms or []) if term.strip()]
+    excluded = [
+        str(term).casefold().strip()[:100]
+        for term in list(exclude_terms or [])[:20]
+        if str(term).strip()
+    ]
     results = []
 
     for work in results_by_key.values():

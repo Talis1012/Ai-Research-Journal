@@ -1,5 +1,6 @@
 import hashlib
 import os
+from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +16,10 @@ class UserScope:
 _current_user_scope: ContextVar[UserScope | None] = ContextVar(
     "research_journal_user_scope",
     default=None,
+)
+_allow_unscoped_paths: ContextVar[bool] = ContextVar(
+    "research_journal_allow_unscoped_paths",
+    default=False,
 )
 
 
@@ -45,6 +50,17 @@ def get_user_scope() -> UserScope | None:
     return _current_user_scope.get()
 
 
+@contextmanager
+def allow_unscoped_paths():
+    """Explicitly allow legacy paths for migrations and isolated tests only."""
+    token = _allow_unscoped_paths.set(True)
+
+    try:
+        yield
+    finally:
+        _allow_unscoped_paths.reset(token)
+
+
 def _uses_legacy_workspace(scope: UserScope) -> bool:
     legacy_subject = os.getenv("AUTH0_LEGACY_OWNER_SUB", "").strip()
 
@@ -58,14 +74,22 @@ def _uses_legacy_workspace(scope: UserScope) -> bool:
 def scoped_path(base_path: str | Path) -> Path:
     """Return a private path for the active user.
 
-    Without an active authenticated scope (for example, in unit tests), the
-    original path is preserved. A configured legacy owner also keeps the old
-    single-user paths so existing data remains available only to that account.
+    Access fails closed without an authenticated scope. Migrations and tests
+    must opt into an unscoped legacy path explicitly. A configured legacy owner
+    keeps the old single-user paths after successful authentication.
     """
     base = Path(base_path).expanduser()
     scope = get_user_scope()
 
-    if scope is None or _uses_legacy_workspace(scope):
+    if scope is None:
+        if _allow_unscoped_paths.get():
+            return base
+
+        raise RuntimeError(
+            "Private storage cannot be accessed without an authenticated user scope."
+        )
+
+    if _uses_legacy_workspace(scope):
         return base
 
     return base.parent / "users" / scope.storage_key / base.name

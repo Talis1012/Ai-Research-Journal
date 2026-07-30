@@ -6,12 +6,13 @@ from datetime import datetime
 import pandas as pd
 import streamlit as st
 
-from db.database import init_db
+from db.database import init_db_once
 from db.queries import get_projects
 from db.writing_queries import (
     AI_CONTEXT_MODES,
     CITATION_STYLES,
     MANUSCRIPT_STATUSES,
+    StoredFileCleanupError,
     add_manuscript_version_comment,
     add_manuscript_ai_message,
     add_manuscript_section,
@@ -80,12 +81,15 @@ from services.manuscript_review_service import (
     template_rules,
 )
 from utils.auth import require_auth
+from utils.content_safety import safe_external_url
 from utils.markdown_toolbar import render_markdown_toolbar
 from utils.ui import (
     compact_date,
     header_icons,
     load_css,
     render_html,
+    render_untrusted_caption,
+    render_untrusted_markdown,
     safe_html,
     sidebar_nav,
     top_brand,
@@ -99,7 +103,7 @@ st.set_page_config(
 )
 
 require_auth()
-init_db()
+init_db_once(st.session_state)
 load_css()
 
 
@@ -848,12 +852,12 @@ def _render_readonly_asset(asset):
 
     if asset["asset_type"] == "equation":
         st.latex(asset.get("content", {}).get("latex", ""))
-        st.caption(caption)
+        render_untrusted_caption(caption)
         return
 
     columns = asset.get("content", {}).get("columns", [])
     rows = asset.get("content", {}).get("rows", [])
-    st.caption(caption)
+    render_untrusted_caption(caption)
     st.dataframe(pd.DataFrame(rows, columns=columns), width="stretch", hide_index=True)
 
 
@@ -1077,7 +1081,11 @@ def _render_manage_manuscript_object(
             content = asset.get("content", {})
 
             if asset["asset_type"] == "figure" and new_upload is not None:
-                stored = save_figure_upload(new_upload, manuscript["id"])
+                stored = save_figure_upload(
+                    new_upload,
+                    manuscript["id"],
+                    replacing_storage_path=asset.get("storage_path"),
+                )
                 original_filename = stored["original_filename"]
                 storage_path = stored["storage_path"]
                 mime_type = stored["mime_type"]
@@ -1112,7 +1120,7 @@ def _render_manage_manuscript_object(
             st.toast(f"{asset['label']} saved.")
             st.rerun()
         except Exception as exc:
-            if stored:
+            if stored and not isinstance(exc, StoredFileCleanupError):
                 delete_manuscript_asset_file(stored["storage_path"])
             st.error(str(exc))
 
@@ -1194,7 +1202,9 @@ def _render_manuscript_objects(manuscript, section, sections, assets, current_co
             )
 
         with add_tab:
-            st.caption(f"New objects are attached to {section['title']} and numbered globally.")
+            render_untrusted_caption(
+                f"New objects are attached to {section['title']} and numbered globally."
+            )
             _render_add_manuscript_object(manuscript, section)
 
 
@@ -1252,7 +1262,7 @@ def _render_editor(manuscript, section, sections, sources, assets):
             ),
             assets,
         )
-        st.markdown(preview or "*This section is empty.*")
+        render_untrusted_markdown(preview or "*This section is empty.*")
 
         for asset in assets:
             if asset["section_id"] == section["id"]:
@@ -1411,7 +1421,7 @@ def _render_ai_assistant(manuscript, section, sections, sources, evidence):
 
     for message in messages[-4:]:
         with st.chat_message("assistant" if message["role"] == "assistant" else "user"):
-            st.markdown(message["content"])
+            render_untrusted_markdown(message["content"])
 
     with st.form("writing_ai_form", clear_on_submit=False):
         instruction = st.text_area(
@@ -1486,7 +1496,7 @@ def _render_ai_assistant(manuscript, section, sections, sources, evidence):
             st.caption("Red text will be removed; green text will be added.")
 
         if suggestion.get("explanation"):
-            st.caption(suggestion["explanation"])
+            render_untrusted_caption(suggestion["explanation"])
 
         context_used = suggestion.get("context_used") or {}
 
@@ -1510,10 +1520,12 @@ def _render_ai_assistant(manuscript, section, sections, sources, evidence):
             with st.expander("Claim check", expanded=suggestion_mode == "Check claims"):
                 for claim in suggestion["claims"]:
                     status_icon = {"supported": "✓", "weak": "△", "unsupported": "!"}[claim["status"]]
-                    st.markdown(
+                    render_untrusted_markdown(
                         f"**{status_icon} {claim['status'].title()}** — {claim['claim']}"
                     )
-                    st.caption(claim["reason"] or "No reason returned.")
+                    render_untrusted_caption(
+                        claim["reason"] or "No reason returned."
+                    )
 
         if suggestion_mode != "Check claims":
             blocks = _split_paragraphs(suggested_text) or [suggested_text.strip()]
@@ -1997,7 +2009,9 @@ def _render_source_card(source, manuscript, selected_section_id: int | None):
             st.rerun()
 
     with st.expander("Abstract and citation settings"):
-        st.write(source["abstract"] or "No abstract is available.")
+        render_untrusted_markdown(
+            source["abstract"] or "No abstract is available."
+        )
 
         with st.form(f"source_settings_{source['library_item_id']}"):
             citation_key = st.text_input(
@@ -2023,8 +2037,10 @@ def _render_source_card(source, manuscript, selected_section_id: int | None):
             except Exception as exc:
                 st.error(str(exc))
 
-        if source["url"]:
-            st.link_button("Open original source", source["url"], width="stretch")
+        source_url = safe_external_url(source["url"])
+
+        if source_url:
+            st.link_button("Open original source", source_url, width="stretch")
 
 
 def _render_sources_tab(manuscript):
@@ -2101,7 +2117,7 @@ def _render_sources_tab(manuscript):
             lines = bibliography_lines(sources, manuscript["citation_style"])
 
             for line in lines:
-                st.markdown(line)
+                render_untrusted_markdown(line)
 
             reference_section = next(
                 (
@@ -2140,7 +2156,7 @@ def _render_sources_tab(manuscript):
 
         for row in attached_evidence:
             with st.container(border=True):
-                st.markdown(f"**{row['label']}**")
+                render_untrusted_markdown(f"**{row['label']}**")
                 st.caption(row["evidence_type"].replace("_", " ").title())
 
                 if st.button(
@@ -2166,7 +2182,7 @@ def _render_sources_tab(manuscript):
                 st.caption("No additional project evidence is available.")
 
             for row in unattached:
-                st.markdown(f"**{row['label']}**")
+                render_untrusted_markdown(f"**{row['label']}**")
                 st.caption(row["evidence_type"].replace("_", " ").title())
 
                 if st.button(
@@ -2386,7 +2402,7 @@ def _render_versions_tab(manuscript):
             title_col, meta_col = st.columns([2, 1], gap="small")
 
             with title_col:
-                st.markdown(f"**{version['label']}**")
+                render_untrusted_markdown(f"**{version['label']}**")
                 render_html(
                     f'<div class="writing-version-comment">'
                     f'{safe_html(version["note"] or "No version comment.")}</div>'

@@ -6,10 +6,20 @@ from textwrap import dedent
 import streamlit as st
 
 from utils.auth import current_user_profile, logout
+from services.workspace_service import delete_current_user_workspace
+from utils.content_safety import sanitize_untrusted_markdown
 
 
 def safe_html(value) -> str:
     return html.escape(str(value or ""))
+
+
+def render_untrusted_markdown(value):
+    st.markdown(sanitize_untrusted_markdown(value))
+
+
+def render_untrusted_caption(value):
+    st.caption(sanitize_untrusted_markdown(value))
 
 
 def _mindmap_row_value(row, key: str, default=""):
@@ -672,52 +682,44 @@ def load_css():
             background: transparent !important;
         }
 
-        .left-rail {
-            min-height: calc(100vh - var(--topbar-h));
-            background: #ffffff;
-            border-right: 0;
-            padding: 26px 18px 22px 20px;
-        }
-
         div[data-testid="stHorizontalBlock"]:has(.nav-panel-scope) {
             background: #ffffff;
         }
 
-        div[data-testid="column"]:has(.nav-panel-scope) {
+        div[data-testid="column"]:has(.nav-panel-scope),
+        div[data-testid="stColumn"]:has(.nav-panel-scope) {
             min-height: calc(100vh - var(--topbar-h));
             background: #ffffff;
             border-right: 1px solid var(--line);
+            padding: 26px 18px 22px 20px !important;
         }
 
-        .nav-item {
-            height: 48px;
-            display: flex;
-            align-items: center;
+        div[class*="st-key-sidebar_nav_"] {
+            margin-bottom: 8px;
+        }
+
+        div[class*="st-key-sidebar_nav_"] div[data-testid="stPageLink"] a {
+            min-height: 48px;
+            justify-content: flex-start;
             gap: 12px;
+            border: 0;
             border-radius: 7px;
             padding: 0 13px;
+            background: transparent;
             color: #2d3748;
             font-size: 0.96rem;
             font-weight: 600;
-            margin-bottom: 8px;
             text-decoration: none;
         }
 
-        .nav-item.active {
+        div[class*="st-key-sidebar_nav_active_"] div[data-testid="stPageLink"] a {
             background: #eaf3ff;
             color: #1064cc;
         }
 
-        .nav-item:hover {
+        div[class*="st-key-sidebar_nav_"] div[data-testid="stPageLink"] a:hover {
             background: #f3f7fc;
             color: #1064cc;
-        }
-
-        .nav-icon {
-            width: 22px;
-            text-align: center;
-            color: inherit;
-            font-size: 1.12rem;
         }
 
         .work-panel {
@@ -1548,7 +1550,6 @@ def load_css():
         }
 
         @media (max-width: 1100px) {
-            .left-rail,
             .work-panel,
             .center-panel,
             .right-panel {
@@ -1629,27 +1630,21 @@ def sidebar_nav(active_page: str = "experiments"):
     }
     active_page = active_aliases.get(active_page, active_page)
     items = [
-        ("experiments", "/Experiments", "🧪", "Experiments"),
-        ("library", "/Library", "📚", "Library"),
-        ("paper_writing", "/Paper_Writing", "✎", "Paper Writing"),
+        ("experiments", "pages/1_Experiments.py", "🧪", "Experiments"),
+        ("library", "pages/2_Library.py", "📚", "Library"),
+        ("paper_writing", "pages/3_Paper_Writing.py", "✍️", "Paper Writing"),
     ]
 
-    nav_html = "\n".join(
-        f"""
-        <a class="nav-item {'active' if item_id == active_page else ''}" href="{href}" target="_self">
-            <span class="nav-icon">{icon}</span><span>{label}</span>
-        </a>
-        """
-        for item_id, href, icon, label in items
-    )
+    for item_id, page_path, icon, label in items:
+        state = "active" if item_id == active_page else "inactive"
 
-    render_html(
-        f"""
-        <div class="left-rail">
-            {nav_html}
-        </div>
-        """
-    )
+        with st.container(key=f"sidebar_nav_{state}_{item_id}"):
+            st.page_link(
+                page_path,
+                label=label,
+                icon=icon,
+                width="stretch",
+            )
 
 
 def header_icons():
@@ -1684,6 +1679,25 @@ def header_icons():
                 on_click=logout,
                 key="auth_logout_button",
             )
+            st.divider()
+            workspace_delete_text = st.text_input(
+                "Tastează DELETE pentru a șterge definitiv toate datele",
+                key="confirm_workspace_delete",
+            )
+
+            if st.button(
+                "Șterge spațiul meu de lucru",
+                type="primary",
+                width="stretch",
+                disabled=workspace_delete_text.strip() != "DELETE",
+                key="delete_workspace_button",
+            ):
+                try:
+                    delete_current_user_workspace()
+                except (OSError, RuntimeError) as exc:
+                    st.error(str(exc))
+                else:
+                    logout()
 
 
 def experiment_card(title: str, snippet: str, created_at: str, selected: bool = False, chat_id: int | None = None):

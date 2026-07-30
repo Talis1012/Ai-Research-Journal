@@ -8,3 +8,5 @@ data/library/
 data/users/
 .streamlit/secrets.toml
 .DS_Store
+data/manuscript_assets/
+data/security_limits.db

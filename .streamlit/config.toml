@@ -8,3 +8,4 @@ font = "sans serif"
 
 [server]
 maxUploadSize = 25
+maxMessageSize = 128

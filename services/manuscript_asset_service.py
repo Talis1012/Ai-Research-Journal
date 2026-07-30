@@ -1,11 +1,14 @@
 import io
 import os
+import shutil
 import tempfile
+import warnings
 from pathlib import Path
 from uuid import uuid4
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
+from services.resource_limits import enforce_storage_quota, env_int
 from utils.user_scope import scoped_path
 
 
@@ -17,7 +20,13 @@ def get_manuscript_asset_storage_path() -> Path:
     storage_path = scoped_path(
         os.getenv("MANUSCRIPT_ASSET_STORAGE_PATH", "data/manuscript_assets")
     )
-    storage_path.mkdir(parents=True, exist_ok=True)
+    storage_path.mkdir(parents=True, exist_ok=True, mode=0o700)
+
+    try:
+        storage_path.chmod(0o700)
+    except OSError:
+        pass
+
     return storage_path
 
 
@@ -31,7 +40,12 @@ def _path_inside_asset_storage(path: str | Path) -> Path:
     return resolved_path
 
 
-def save_figure_upload(uploaded_file, manuscript_id: int) -> dict:
+def save_figure_upload(
+    uploaded_file,
+    manuscript_id: int,
+    *,
+    replacing_storage_path: str | None = None,
+) -> dict:
     original_filename = Path(str(uploaded_file.name or "")).name.strip()
 
     if not original_filename:
@@ -45,23 +59,92 @@ def save_figure_upload(uploaded_file, manuscript_id: int) -> dict:
     if len(file_bytes) > MAX_FIGURE_FILE_SIZE:
         raise ValueError("The figure is larger than the 25 MB upload limit.")
 
+    max_pixels = env_int(
+        "MAX_FIGURE_PIXELS",
+        MAX_FIGURE_PIXELS,
+        maximum=MAX_FIGURE_PIXELS,
+    )
+
     try:
-        with Image.open(io.BytesIO(file_bytes)) as opened:
-            opened.load()
-            image = ImageOps.exif_transpose(opened)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
 
-            if image.width * image.height > MAX_FIGURE_PIXELS:
-                raise ValueError("The figure dimensions are too large.")
+            with Image.open(io.BytesIO(file_bytes)) as opened:
+                width, height = opened.size
 
-            if image.mode not in ("RGB", "RGBA"):
-                image = image.convert("RGBA" if "transparency" in image.info else "RGB")
+                if width <= 0 or height <= 0 or width * height > max_pixels:
+                    raise ValueError("The figure dimensions are too large.")
 
-            target_dir = get_manuscript_asset_storage_path() / str(int(manuscript_id))
-            target_dir.mkdir(parents=True, exist_ok=True)
-            target_path = target_dir / f"{uuid4().hex}.png"
-            image.save(target_path, format="PNG", optimize=True)
-            width, height = image.size
-    except (UnidentifiedImageError, OSError) as exc:
+                if int(getattr(opened, "n_frames", 1)) != 1:
+                    raise ValueError("Animated or multi-page images are not supported.")
+
+                opened.verify()
+
+            with Image.open(io.BytesIO(file_bytes)) as opened:
+                image = ImageOps.exif_transpose(opened)
+                image.load()
+
+                if image.mode not in ("RGB", "RGBA"):
+                    image = image.convert(
+                        "RGBA" if "transparency" in image.info else "RGB"
+                    )
+
+                normalized = io.BytesIO()
+                image.save(normalized, format="PNG", compress_level=6)
+                normalized_bytes = normalized.getvalue()
+                width, height = image.size
+
+        max_normalized_size = env_int(
+            "MAX_NORMALIZED_FIGURE_SIZE",
+            50 * 1024 * 1024,
+            maximum=100 * 1024 * 1024,
+        )
+
+        if len(normalized_bytes) > max_normalized_size:
+            raise ValueError("The normalized figure is too large to store.")
+
+        asset_root = get_manuscript_asset_storage_path()
+        replaced_size = 0
+
+        if replacing_storage_path:
+            replaced_path = _path_inside_asset_storage(replacing_storage_path)
+
+            if replaced_path.is_file():
+                replaced_size = replaced_path.stat().st_size
+
+        enforce_storage_quota(
+            asset_root,
+            len(normalized_bytes),
+            quota_bytes=env_int(
+                "MAX_MANUSCRIPT_ASSET_STORAGE_BYTES",
+                250 * 1024 * 1024,
+                minimum=max_normalized_size,
+            ),
+            label="manuscript figure",
+            max_files=env_int(
+                "MAX_STORED_MANUSCRIPT_FIGURES",
+                500,
+                maximum=5000,
+            ),
+            reclaim_bytes=replaced_size,
+            replacing_file=replaced_size > 0,
+        )
+        target_dir = asset_root / str(int(manuscript_id))
+        target_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        target_path = target_dir / f"{uuid4().hex}.png"
+        target_path.write_bytes(normalized_bytes)
+
+        try:
+            target_dir.chmod(0o700)
+            target_path.chmod(0o600)
+        except OSError:
+            pass
+    except (
+        Image.DecompressionBombError,
+        Image.DecompressionBombWarning,
+        UnidentifiedImageError,
+        OSError,
+    ) as exc:
         raise ValueError("Upload a valid PNG, JPEG, WEBP, GIF, BMP or TIFF image.") from exc
 
     return {
@@ -93,6 +176,26 @@ def delete_manuscript_asset_file(storage_path: str | None):
 
     if safe_path.is_file():
         safe_path.unlink()
+
+    storage_root = get_manuscript_asset_storage_path().resolve()
+    parent = safe_path.parent
+
+    if parent != storage_root:
+        try:
+            parent.rmdir()
+        except OSError:
+            pass
+
+
+def delete_manuscript_asset_directory(manuscript_id: int):
+    directory = _path_inside_asset_storage(
+        get_manuscript_asset_storage_path() / str(int(manuscript_id))
+    )
+
+    if directory.is_symlink():
+        directory.unlink()
+    elif directory.is_dir():
+        shutil.rmtree(directory)
 
 
 def render_equation_png(latex: str, *, dpi: int = 220) -> bytes:

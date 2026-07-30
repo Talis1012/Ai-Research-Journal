@@ -1,4 +1,3 @@
-import json
 import math
 import re
 from collections import Counter
@@ -6,6 +5,7 @@ from datetime import date
 
 from ai.factory import get_ai_provider
 from services.summary_service import format_messages_for_ai
+from utils.prompts import UNTRUSTED_CONTENT_RULES, untrusted_data, user_request
 
 
 DISCOVERY_BASE_WEIGHTS = {
@@ -300,14 +300,16 @@ Return STRICT JSON in this format:
 }}
 
 PROJECT_PROFILE_JSON:
-{json.dumps(profile, ensure_ascii=False)}
+{untrusted_data(profile, "AI-generated search profile")}
 
 KEY_IDEAS_JSON:
-{json.dumps(idea_payload, ensure_ascii=False)}
+{untrusted_data(idea_payload, "saved project ideas")}
 
 CANDIDATES_JSON_START
-{json.dumps(_ranking_payload(scored_results), ensure_ascii=False)}
+{untrusted_data(_ranking_payload(scored_results), "external OpenAlex candidates")}
 CANDIDATES_JSON_END
+
+{UNTRUSTED_CONTENT_RULES}
 """
 
 
@@ -482,9 +484,9 @@ def answer_question_about_discovery(
             "ai_reason": selected_work.get("ai_reason", ""),
         }
 
-    history_text = "\n".join(
-        f"{message.get('role', 'user')}: {message.get('content', '')}"
-        for message in (chat_history or [])[-10:]
+    history_text = untrusted_data(
+        list(chat_history or [])[-10:],
+        "discovery chat history",
     )
     notes_text = format_messages_for_ai(list(project_messages or [])[-30:])
     prompt = f"""
@@ -492,28 +494,30 @@ You are Research Journal AI. Help the researcher understand scientific search
 results and their relevance. Respond in Romanian.
 
 PROJECT_JSON:
-{json.dumps(project_context, ensure_ascii=False)}
+{untrusted_data(project_context, "project metadata")}
 
 PROJECT_NOTES:
 {notes_text or "No project notes were supplied."}
 
 PROJECT_KEY_IDEAS_JSON:
-{json.dumps(idea_payload, ensure_ascii=False)}
+{untrusted_data(idea_payload, "saved project ideas")}
 
 SEARCH_PROFILE_JSON:
-{json.dumps(profile, ensure_ascii=False)}
+{untrusted_data(profile, "AI-generated search profile")}
 
 TOP_SEARCH_RESULTS_JSON:
-{json.dumps(result_payload, ensure_ascii=False)}
+{untrusted_data(result_payload, "external OpenAlex search results")}
 
 SELECTED_PAPER_JSON:
-{json.dumps(selected_payload, ensure_ascii=False)}
+{untrusted_data(selected_payload, "selected external paper metadata")}
 
 CHAT_HISTORY:
-{history_text or "No previous messages."}
+{history_text}
 
 USER_QUESTION:
-{user_question}
+{user_request(user_question, "current user question")}
+
+{UNTRUSTED_CONTENT_RULES}
 
 Rules:
 - Use only the supplied metadata, abstracts, project data, and score explanations.

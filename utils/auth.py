@@ -1,3 +1,4 @@
+import math
 import time
 
 import streamlit as st
@@ -6,6 +7,46 @@ from utils.user_scope import activate_user_scope, clear_user_scope
 
 
 AUTH0_PROVIDER = "auth0"
+
+
+class InvalidIdentityError(ValueError):
+    pass
+
+
+def validate_identity_claims(
+    claims: dict,
+    *,
+    now: int | float | None = None,
+) -> tuple[str, str, int | float]:
+    """Validate the claims required before activating private storage."""
+    expires_at = claims.get("exp")
+
+    if (
+        not isinstance(expires_at, (int, float))
+        or isinstance(expires_at, bool)
+        or not math.isfinite(expires_at)
+    ):
+        raise InvalidIdentityError(
+            "Sesiunea nu conține o dată de expirare validă. Autentifică-te din nou."
+        )
+
+    expiration = expires_at
+    current_time = time.time() if now is None else now
+
+    if expiration <= current_time:
+        raise InvalidIdentityError(
+            "Sesiunea a expirat. Autentifică-te din nou."
+        )
+
+    issuer = str(claims.get("iss") or "").strip()
+    subject = str(claims.get("sub") or "").strip()
+
+    if not issuer or not subject:
+        raise InvalidIdentityError(
+            "Identitatea Auth0 nu conține identificatorii obligatorii `iss` și `sub`."
+        )
+
+    return issuer, subject, expiration
 
 
 def _auth0_is_configured() -> bool:
@@ -105,29 +146,14 @@ def require_auth() -> dict:
         _render_login_page()
         st.stop()
 
-    expires_at = claims.get("exp")
-
     try:
-        is_expired = expires_at is not None and int(expires_at) <= int(time.time())
-    except (TypeError, ValueError):
-        is_expired = False
-
-    if is_expired:
-        st.warning("Sesiunea a expirat. Te redirecționăm către autentificare.")
+        issuer, subject, _ = validate_identity_claims(claims)
+    except InvalidIdentityError as exc:
+        st.error(str(exc))
         clear_user_scope()
         st.logout()
         st.stop()
-
-    issuer = str(claims.get("iss") or "").strip()
-    subject = str(claims.get("sub") or "").strip()
-
-    if not issuer or not subject:
-        st.error(
-            "Identitatea Auth0 nu conține identificatorii obligatorii "
-            "`iss` și `sub`."
-        )
-        st.button("Deconectare", on_click=st.logout)
-        st.stop()
+        return {}
 
     activate_user_scope(issuer, subject)
     return claims

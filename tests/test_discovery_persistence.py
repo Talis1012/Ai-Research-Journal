@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from db.database import get_connection, init_db
+from utils.user_scope import activate_user_scope, clear_user_scope
 from db.discovery_queries import (
     get_project_discovery_results,
     replace_project_discovery_results,
@@ -37,6 +38,7 @@ class DiscoveryPersistenceTestCase(unittest.TestCase):
         os.environ["DATABASE_PATH"] = str(
             Path(self.temp_dir.name) / "discovery.db"
         )
+        activate_user_scope("https://tests.local", "discovery-persistence")
         init_db()
         self.project_id = create_project(
             "Thiazole project",
@@ -45,6 +47,8 @@ class DiscoveryPersistenceTestCase(unittest.TestCase):
         )
 
     def tearDown(self):
+        clear_user_scope()
+
         if self.previous_db_path is None:
             os.environ.pop("DATABASE_PATH", None)
         else:

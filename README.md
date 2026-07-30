@@ -61,3 +61,19 @@ AUTH0_LEGACY_OWNER_ISSUER=https://domeniul-tau.auth0.com/
 
 Valorile se găsesc în profilul utilizatorului din Auth0 Dashboard. Fără această
 configurație, niciun cont autentificat nu primește automat datele vechi.
+
+Utilizatorii pot șterge definitiv spațiul lor de lucru din meniul contului.
+Operația elimină baza de date și toate fișierele audio, documentele și figurile
+din directoarele asociate identității lor. Pentru proprietarul configurat în
+modul legacy, ștergerea automată este dezactivată pentru a evita eliminarea unui
+director vechi configurat prea larg.
+
+## Limite de resurse
+
+Aplicația aplică în backend cote per utilizator și globale pentru Gemini,
+OpenAlex și transcriere, limite de concurență, maximum cinci query-uri OpenAlex
+într-o căutare și cote cumulative pentru fișiere. Valorile implicite sunt
+documentate în `.env.example` și trebuie ajustate în funcție de capacitatea și
+bugetul deploymentului. Contoarele sunt păstrate în `data/security_limits.db`;
+toate instanțele care folosesc aceeași cheie API trebuie să folosească aceeași
+bază de limite sau un echivalent centralizat oferit de platforma cloud.

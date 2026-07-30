@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import streamlit as st
 from streamlit_agraph import agraph, Config, Edge, Node
 
-from db.database import init_db
+from db.database import init_db_once
 from db.queries import (
     add_experiment_ai_message,
     add_message,
@@ -17,8 +17,6 @@ from db.queries import (
     delete_message,
     delete_project,
     delete_project_ideas,
-    get_audio_file_paths_by_chat,
-    get_audio_file_paths_by_project,
     get_audio_record_by_message_id,
     get_audio_records,
     get_chat_summary,
@@ -72,6 +70,8 @@ from utils.ui import (
     header_icons,
     load_css,
     render_html,
+    render_untrusted_caption,
+    render_untrusted_markdown,
     safe_html,
     sidebar_nav,
     top_brand,
@@ -85,7 +85,7 @@ st.set_page_config(
 )
 
 require_auth()
-init_db()
+init_db_once(st.session_state)
 load_css()
 
 
@@ -418,7 +418,7 @@ def render_create_project_form(*, key: str):
 
 def render_delete_project_control(selected_project, projects):
     with st.popover("🗑", width="stretch"):
-        st.markdown(f"**Delete {selected_project['name']}?**")
+        render_untrusted_markdown(f"**Delete {selected_project['name']}?**")
         st.caption(
             "This permanently deletes every experiment, note, AI conversation, "
             "summary, key idea, mind map node, and audio recording in the project."
@@ -435,11 +435,6 @@ def render_delete_project_control(selected_project, projects):
             type="primary",
             width="stretch",
         ):
-            for audio_path in get_audio_file_paths_by_project(
-                selected_project["id"]
-            ):
-                delete_audio_file(audio_path)
-
             delete_project(selected_project["id"])
             remaining_project_ids = [
                 project["id"]
@@ -676,15 +671,17 @@ def render_notes_tab(selected_chat, messages, audio_records):
             st.audio(audio_file)
 
             if st.button("Save and transcribe audio", width="stretch"):
-                with st.spinner("Saving and transcribing locally..."):
-                    audio_path = save_audio_file(audio_file, selected_chat["id"])
-                    language = None if language_option == "auto" else language_option
-                    transcript = transcribe_audio(audio_path, language=language)
+                audio_path = None
 
-                if not transcript:
-                    delete_audio_file(audio_path)
-                    st.error("The audio could not be transcribed.")
-                else:
+                try:
+                    with st.spinner("Saving and transcribing locally..."):
+                        audio_path = save_audio_file(audio_file, selected_chat["id"])
+                        language = None if language_option == "auto" else language_option
+                        transcript = transcribe_audio(audio_path, language=language)
+
+                    if not transcript:
+                        raise ValueError("The audio could not be transcribed.")
+
                     message_id = add_message(
                         chat_id=selected_chat["id"],
                         role="user",
@@ -699,6 +696,11 @@ def render_notes_tab(selected_chat, messages, audio_records):
                     )
                     st.success("Audio saved and added to Notes.")
                     st.rerun()
+                except (ValueError, RuntimeError, OSError) as exc:
+                    if audio_path:
+                        delete_audio_file(audio_path)
+
+                    st.error(str(exc))
 
         if audio_records:
             st.divider()
@@ -720,7 +722,7 @@ def render_ai_chat_panel(selected_project, selected_chat, messages, ai_messages)
 
         for message in ai_messages:
             with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+                render_untrusted_markdown(message["content"])
                 st.caption(compact_date(message["created_at"]))
 
     with st.form("experiment_ai_chat", clear_on_submit=True):
@@ -794,9 +796,6 @@ def render_experiment_settings(selected_chat, all_chats):
         width="stretch",
         key=f"delete_experiment_{selected_chat['id']}",
     ):
-        for audio_path in get_audio_file_paths_by_chat(selected_chat["id"]):
-            delete_audio_file(audio_path)
-
         delete_chat(selected_chat["id"])
         remaining = [
             chat["id"]
@@ -1062,7 +1061,7 @@ def render_insight_reader(
                         label_visibility="collapsed",
                     )
                 else:
-                    st.markdown(active_summary["content"])
+                    render_untrusted_markdown(active_summary["content"])
                     st.caption(f"Updated {active_summary['created_at']}")
             elif selection == "project":
                 st.info(
@@ -1118,11 +1117,13 @@ def render_insight_reader(
             elif project_ideas:
                 for idea in project_ideas:
                     importance = (idea["importance"] or "medium").title()
-                    st.markdown(f"**{idea['title']}** · {importance}")
-                    st.write(idea["description"])
+                    render_untrusted_markdown(
+                        f"**{idea['title']}** · {importance}"
+                    )
+                    render_untrusted_markdown(idea["description"])
 
                     if idea["evidence"]:
-                        st.caption(f"Evidence: {idea['evidence']}")
+                        render_untrusted_caption(f"Evidence: {idea['evidence']}")
 
                     st.divider()
             else:
@@ -1276,10 +1277,12 @@ def render_node_context_chat(
     history = st.session_state[history_key]
 
     with st.container(border=True):
-        st.markdown(f"#### Contextual AI Chat · {selected_node['label']}")
+        render_untrusted_markdown(
+            f"#### Contextual AI Chat · {selected_node['label']}"
+        )
 
         if selected_node["description"]:
-            st.caption(selected_node["description"])
+            render_untrusted_caption(selected_node["description"])
 
         with st.container(height=240, border=True):
             if not history:
@@ -1287,7 +1290,7 @@ def render_node_context_chat(
 
             for message in history:
                 with st.chat_message(message["role"]):
-                    st.markdown(message["content"])
+                    render_untrusted_markdown(message["content"])
 
         with st.form(
             f"insight_node_question_form_{project_id}_{node_key}",
@@ -1385,7 +1388,7 @@ def render_interactive_mindmap(
             Node(
                 id=node["node_key"],
                 label=node["label"],
-                title=node["description"] or "",
+                title="Open contextual details",
                 size=node_sizes.get(importance, 30),
                 color=node_colors.get(importance, "#4d91d8"),
                 font={
@@ -1502,7 +1505,7 @@ def render_project_ai_chat(
 
         for message in history:
             with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+                render_untrusted_markdown(message["content"])
 
     with st.form(f"project_insights_ai_form_{project_id}", clear_on_submit=True):
         typed_question = st.text_area(
@@ -1852,29 +1855,35 @@ with page_col:
             mindmap_edges=mindmap_edges,
         )
 
+        if mindmap_sync_signature:
+            st.info(
+                "The mind map has unsynchronized notes or ideas. "
+                "Updating it uses one AI request."
+            )
+
+            if st.button(
+                "Synchronize mind map with AI",
+                key=f"sync_mindmap_{selected_project['id']}",
+                width="stretch",
+            ):
+                try:
+                    with st.spinner("Synchronizing the mind map..."):
+                        sync_project_mindmap(
+                            project_id=selected_project["id"],
+                            project_name=selected_project["name"],
+                            messages=project_messages,
+                            ideas=project_ideas,
+                        )
+                    st.session_state.pop(mindmap_failure_signature_key, None)
+                    st.session_state.pop(mindmap_failure_message_key, None)
+                    st.rerun()
+                except Exception as exc:
+                    st.session_state[mindmap_failure_signature_key] = (
+                        mindmap_sync_signature
+                    )
+                    st.session_state[mindmap_failure_message_key] = str(exc)
+
         mindmap_error = st.session_state.get(mindmap_failure_message_key)
 
         if mindmap_error:
             st.warning(f"Mind map synchronization needs attention: {mindmap_error}")
-
-
-if (
-    selected_project
-    and mindmap_sync_signature
-    and st.session_state.get(mindmap_failure_signature_key)
-    != mindmap_sync_signature
-):
-    try:
-        sync_project_mindmap(
-            project_id=selected_project["id"],
-            project_name=selected_project["name"],
-            messages=project_messages,
-            ideas=project_ideas,
-        )
-        st.session_state.pop(mindmap_failure_signature_key, None)
-        st.session_state.pop(mindmap_failure_message_key, None)
-    except Exception as exc:
-        st.session_state[mindmap_failure_signature_key] = mindmap_sync_signature
-        st.session_state[mindmap_failure_message_key] = str(exc)
-
-    st.rerun()

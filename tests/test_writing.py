@@ -9,7 +9,7 @@ from PIL import Image
 
 from db.database import init_db
 from db.library_queries import create_library_item
-from db.queries import create_project
+from db.queries import create_project, delete_project
 from db.writing_queries import (
     add_manuscript_version_comment,
     add_manuscript_section,
@@ -18,6 +18,8 @@ from db.writing_queries import (
     create_manuscript_asset,
     create_manuscript,
     create_manuscript_version,
+    delete_manuscript,
+    delete_manuscript_asset,
     delete_manuscript_section,
     duplicate_manuscript_version,
     get_manuscript_assets,
@@ -53,6 +55,7 @@ from services.manuscript_export_service import (
     render_asset_references,
 )
 from services.manuscript_asset_service import (
+    get_manuscript_asset_storage_path,
     read_manuscript_asset_file,
     save_figure_upload,
 )
@@ -61,6 +64,7 @@ from services.manuscript_review_service import (
     publication_readiness,
     run_manuscript_checks,
 )
+from utils.user_scope import activate_user_scope, clear_user_scope
 
 
 class FixedWritingProvider:
@@ -100,6 +104,7 @@ class WritingTestCase(unittest.TestCase):
         os.environ["MANUSCRIPT_ASSET_STORAGE_PATH"] = str(
             Path(self.temp_dir.name) / "manuscript-assets"
         )
+        activate_user_scope("https://tests.local", "writing")
         init_db()
         self.project_id = create_project(
             "Writing project",
@@ -121,6 +126,8 @@ class WritingTestCase(unittest.TestCase):
         )
 
     def tearDown(self):
+        clear_user_scope()
+
         if self.previous_db_path is None:
             os.environ.pop("DATABASE_PATH", None)
         else:
@@ -391,6 +398,131 @@ class WritingTestCase(unittest.TestCase):
         self.assertTrue(stored["storage_path"].endswith(".png"))
         self.assertTrue(read_manuscript_asset_file(stored["storage_path"]).startswith(b"\x89PNG"))
 
+    def test_deleting_figure_removes_its_stored_file(self):
+        section = self._results_section()
+        figure_path = (
+            get_manuscript_asset_storage_path()
+            / str(self.manuscript_id)
+            / "delete-me.png"
+        )
+        figure_path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (20, 20), "white").save(figure_path)
+        figure_id = create_manuscript_asset(
+            self.manuscript_id,
+            section["id"],
+            "figure",
+            "Temporary figure",
+            storage_path=str(figure_path),
+            mime_type="image/png",
+        )
+
+        delete_manuscript_asset(figure_id)
+        self.assertFalse(figure_path.exists())
+
+    def test_deleted_figure_is_not_resurrected_from_version_metadata(self):
+        section = self._results_section()
+        figure_path = (
+            get_manuscript_asset_storage_path()
+            / str(self.manuscript_id)
+            / "versioned-delete.png"
+        )
+        figure_path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (20, 20), "white").save(figure_path)
+        figure_id = create_manuscript_asset(
+            self.manuscript_id,
+            section["id"],
+            "figure",
+            "Versioned figure",
+            storage_path=str(figure_path),
+            mime_type="image/png",
+        )
+        insert_manuscript_asset_reference(section["id"], figure_id)
+        version_id = create_manuscript_version(self.manuscript_id, "With figure")
+
+        delete_manuscript_asset(figure_id)
+        restore_manuscript_version(version_id)
+        self.assertEqual(get_manuscript_assets(self.manuscript_id), [])
+        restored_text = "\n".join(
+            row["content_md"] for row in get_manuscript_sections(self.manuscript_id)
+        )
+        self.assertNotIn(f"[[figure:{figure_id}]]", restored_text)
+
+    def test_replacing_figure_removes_previous_file(self):
+        section = self._results_section()
+        figure_dir = get_manuscript_asset_storage_path() / str(
+            self.manuscript_id
+        )
+        figure_dir.mkdir(parents=True, exist_ok=True)
+        old_path = figure_dir / "old.png"
+        new_path = figure_dir / "new.png"
+        Image.new("RGB", (20, 20), "red").save(old_path)
+        Image.new("RGB", (20, 20), "blue").save(new_path)
+        figure_id = create_manuscript_asset(
+            self.manuscript_id,
+            section["id"],
+            "figure",
+            "Replaceable figure",
+            storage_path=str(old_path),
+            mime_type="image/png",
+        )
+
+        update_manuscript_asset(
+            figure_id,
+            caption="Replacement figure",
+            storage_path=str(new_path),
+            mime_type="image/png",
+        )
+        self.assertFalse(old_path.exists())
+        self.assertTrue(new_path.exists())
+
+        orphan_path = figure_dir / "legacy-orphan.png"
+        Image.new("RGB", (10, 10), "gray").save(orphan_path)
+        delete_manuscript(self.manuscript_id)
+        self.assertFalse(new_path.exists())
+        self.assertFalse(orphan_path.exists())
+
+    def test_deleting_section_removes_figure_file(self):
+        section_id = add_manuscript_section(self.manuscript_id, "Delete with figure")
+        figure_path = (
+            get_manuscript_asset_storage_path()
+            / str(self.manuscript_id)
+            / "section.png"
+        )
+        figure_path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (20, 20), "white").save(figure_path)
+        create_manuscript_asset(
+            self.manuscript_id,
+            section_id,
+            "figure",
+            "Section figure",
+            storage_path=str(figure_path),
+            mime_type="image/png",
+        )
+
+        delete_manuscript_section(section_id)
+        self.assertFalse(figure_path.exists())
+
+    def test_deleting_project_removes_cascaded_figure_file(self):
+        section = self._results_section()
+        figure_path = (
+            get_manuscript_asset_storage_path()
+            / str(self.manuscript_id)
+            / "project.png"
+        )
+        figure_path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (20, 20), "white").save(figure_path)
+        create_manuscript_asset(
+            self.manuscript_id,
+            section["id"],
+            "figure",
+            "Project figure",
+            storage_path=str(figure_path),
+            mime_type="image/png",
+        )
+
+        delete_project(self.project_id)
+        self.assertFalse(figure_path.exists())
+
     def test_versions_remap_scientific_object_references(self):
         section = self._results_section()
         table_id = create_manuscript_asset(
@@ -448,7 +580,7 @@ class WritingTestCase(unittest.TestCase):
 
     def test_scientific_objects_export_to_markdown_docx_and_pdf(self):
         section = self._results_section()
-        figure_dir = Path(os.environ["MANUSCRIPT_ASSET_STORAGE_PATH"]) / str(self.manuscript_id)
+        figure_dir = get_manuscript_asset_storage_path() / str(self.manuscript_id)
         figure_dir.mkdir(parents=True, exist_ok=True)
         figure_path = figure_dir / "export.png"
         Image.new("RGB", (900, 420), "#dbeafe").save(figure_path)

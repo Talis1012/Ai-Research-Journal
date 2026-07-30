@@ -10,6 +10,7 @@ from db.library_queries import (
     delete_library_folder,
     get_library_item,
     get_library_external_keys,
+    get_library_item_count,
     get_library_items,
     get_library_stats,
     move_library_items,
@@ -21,6 +22,7 @@ from services.library_service import (
     read_library_file,
     save_library_upload,
 )
+from utils.user_scope import activate_user_scope, clear_user_scope
 
 
 class FakeUpload:
@@ -44,9 +46,12 @@ class LibraryTestCase(unittest.TestCase):
         os.environ["LIBRARY_STORAGE_PATH"] = str(
             Path(self.temp_dir.name) / "files"
         )
+        activate_user_scope("https://tests.local", "library")
         init_db()
 
     def tearDown(self):
+        clear_user_scope()
+
         if self.previous_db_path is None:
             os.environ.pop("DATABASE_PATH", None)
         else:
@@ -129,6 +134,39 @@ class LibraryTestCase(unittest.TestCase):
 
         self.assertIn("10.1000/test", keys["dois"])
         self.assertIn("W123", keys["openalex_ids"])
+
+    def test_library_queries_paginate_and_count_in_sql(self):
+        for index in range(12):
+            create_library_item(
+                title=f"Paper {index:02d}",
+                item_type="paper" if index % 2 == 0 else "pdf",
+                status="Reviewed" if index < 3 else "To read",
+            )
+
+        first_page = get_library_items(
+            item_types=("paper", "pdf"),
+            sort="title",
+            limit=8,
+            offset=0,
+        )
+        second_page = get_library_items(
+            item_types=("paper", "pdf"),
+            sort="title",
+            limit=8,
+            offset=8,
+        )
+
+        self.assertEqual(get_library_item_count(), 12)
+        self.assertEqual(get_library_item_count(status="Reviewed"), 3)
+        self.assertEqual(len(first_page), 8)
+        self.assertEqual(len(second_page), 4)
+        self.assertEqual(first_page[0]["title"], "Paper 00")
+        self.assertEqual(second_page[0]["title"], "Paper 08")
+        self.assertTrue(
+            {row["id"] for row in first_page}.isdisjoint(
+                {row["id"] for row in second_page}
+            )
+        )
 
     def test_storage_rejects_paths_outside_library(self):
         outside_path = Path(self.temp_dir.name) / "outside.txt"

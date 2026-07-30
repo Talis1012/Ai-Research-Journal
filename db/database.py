@@ -1,9 +1,11 @@
 import os
+import shutil
 import sqlite3
 from pathlib import Path
 
 from dotenv import load_dotenv
 
+from services.resource_limits import ResourceLimitError, env_int
 from utils.user_scope import scoped_path
 
 
@@ -17,14 +19,64 @@ def get_db_path() -> str:
 
 def get_connection():
     db_path = get_db_path()
+    db_parent = Path(db_path).parent
 
-    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+    db_parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+
+    try:
+        db_parent.chmod(0o700)
+    except OSError:
+        pass
+
+    reserve = env_int(
+        "MIN_FREE_DISK_BYTES",
+        1024 * 1024 * 1024,
+        minimum=100 * 1024 * 1024,
+    )
+
+    if shutil.disk_usage(db_parent).free < reserve:
+        raise ResourceLimitError(
+            "The server is low on free disk space and cannot update the workspace."
+        )
 
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row #project[0] -> project["name"]
     conn.execute("PRAGMA foreign_keys = ON") #Activează relațiile dintre tabele în SQLite
+    page_size = int(conn.execute("PRAGMA page_size").fetchone()[0])
+    max_database_bytes = env_int(
+        "MAX_USER_DATABASE_BYTES",
+        250 * 1024 * 1024,
+        minimum=10 * 1024 * 1024,
+    )
+    max_pages = max(1, max_database_bytes // page_size)
+    conn.execute(f"PRAGMA max_page_count = {max_pages}")
+
+    try:
+        Path(db_path).chmod(0o600)
+    except OSError:
+        pass
 
     return conn
+
+
+def init_db_once(session_state) -> bool:
+    """Initialize the active user's database once per browser session.
+
+    The marker is keyed by the fully scoped database path, so switching users
+    cannot reuse another user's initialization state. If the workspace was
+    deleted during the session, the missing file forces initialization again.
+    """
+    db_path = get_db_path()
+    state_key = "_initialized_database_paths"
+    initialized_paths = set(session_state.get(state_key, ()))
+
+    if db_path in initialized_paths and Path(db_path).is_file():
+        return False
+
+    init_db()
+    initialized_paths.add(db_path)
+    session_state[state_key] = tuple(sorted(initialized_paths))
+    return True
 
 
 def init_db():

@@ -343,16 +343,16 @@ def get_library_item(item_id: int):
     return row
 
 
-def get_library_items(
+def _library_item_filters(
     *,
     folder_id: int | None = None,
     only_unfiled: bool = False,
     item_type: str | None = None,
+    item_types: tuple[str, ...] | list[str] | None = None,
     status: str | None = None,
     project_id: int | None = None,
     search: str = "",
-    sort: str = "newest",
-):
+) -> tuple[str, list]:
     clauses = []
     params: list = []
 
@@ -362,9 +362,19 @@ def get_library_items(
         clauses.append("item.folder_id = ?")
         params.append(folder_id)
 
+    normalized_types = []
+
     if item_type and item_type != "All types":
-        clauses.append("item.item_type = ?")
-        params.append(item_type)
+        normalized_types.append(item_type)
+
+    for value in item_types or ():
+        if value and value != "All types" and value not in normalized_types:
+            normalized_types.append(value)
+
+    if normalized_types:
+        placeholders = ",".join("?" for _ in normalized_types)
+        clauses.append(f"item.item_type IN ({placeholders})")
+        params.extend(normalized_types)
 
     if status and status != "All statuses":
         clauses.append("item.status = ?")
@@ -406,6 +416,60 @@ def get_library_items(
         )
         params.extend([pattern] * 5)
 
+    where_sql = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+    return where_sql, params
+
+
+def get_library_item_count(
+    *,
+    folder_id: int | None = None,
+    only_unfiled: bool = False,
+    item_type: str | None = None,
+    item_types: tuple[str, ...] | list[str] | None = None,
+    status: str | None = None,
+    project_id: int | None = None,
+    search: str = "",
+) -> int:
+    where_sql, params = _library_item_filters(
+        folder_id=folder_id,
+        only_unfiled=only_unfiled,
+        item_type=item_type,
+        item_types=item_types,
+        status=status,
+        project_id=project_id,
+        search=search,
+    )
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT COUNT(*) AS item_count FROM library_items item" + where_sql,
+        params,
+    ).fetchone()
+    conn.close()
+    return int(row["item_count"] or 0)
+
+
+def get_library_items(
+    *,
+    folder_id: int | None = None,
+    only_unfiled: bool = False,
+    item_type: str | None = None,
+    item_types: tuple[str, ...] | list[str] | None = None,
+    status: str | None = None,
+    project_id: int | None = None,
+    search: str = "",
+    sort: str = "newest",
+    limit: int | None = None,
+    offset: int = 0,
+):
+    where_sql, params = _library_item_filters(
+        folder_id=folder_id,
+        only_unfiled=only_unfiled,
+        item_type=item_type,
+        item_types=item_types,
+        status=status,
+        project_id=project_id,
+        search=search,
+    )
     sort_sql = {
         "newest": "item.created_at DESC, item.id DESC",
         "oldest": "item.created_at ASC, item.id ASC",
@@ -413,10 +477,18 @@ def get_library_items(
         "year_desc": "item.publication_year DESC, item.title COLLATE NOCASE ASC",
         "year_asc": "item.publication_year ASC, item.title COLLATE NOCASE ASC",
     }.get(sort, "item.created_at DESC, item.id DESC")
-    where_sql = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+    pagination_sql = ""
+
+    if limit is not None:
+        pagination_sql = " LIMIT ? OFFSET ?"
+        params.extend([max(1, int(limit)), max(0, int(offset))])
+
     conn = get_connection()
     rows = conn.execute(
-        _library_item_select() + where_sql + f" ORDER BY {sort_sql}",
+        _library_item_select()
+        + where_sql
+        + f" ORDER BY {sort_sql}"
+        + pagination_sql,
         params,
     ).fetchall()
     conn.close()

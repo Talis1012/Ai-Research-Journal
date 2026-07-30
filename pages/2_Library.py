@@ -4,7 +4,7 @@ from datetime import datetime
 
 import streamlit as st
 
-from db.database import init_db
+from db.database import init_db_once
 from db.discovery_queries import (
     get_latest_project_discovery_results,
     get_project_discovery_results,
@@ -21,6 +21,7 @@ from db.library_queries import (
     get_library_external_keys,
     get_library_folders,
     get_library_item,
+    get_library_item_count,
     get_library_items,
     get_library_stats,
     move_library_items,
@@ -30,24 +31,21 @@ from db.library_queries import (
     update_library_item,
 )
 from db.queries import get_project_ideas, get_project_messages, get_projects
-from services.bibliography_service import generate_bibliography_search_profile
-from services.discovery_service import (
-    answer_question_about_discovery,
-    rank_discovery_results,
-)
 from services.library_service import (
     delete_library_file,
     read_library_file,
     save_library_upload,
+    validate_library_upload_batch,
 )
-from services.openalex_service import search_works_for_queries
 from utils.auth import require_auth
+from utils.content_safety import safe_external_url, sanitize_untrusted_markdown
 from utils.ui import (
     chat_message,
     compact_date,
     header_icons,
     load_css,
     render_html,
+    render_untrusted_caption,
     safe_html,
     sidebar_nav,
     top_brand,
@@ -61,7 +59,7 @@ st.set_page_config(
 )
 
 require_auth()
-init_db()
+init_db_once(st.session_state)
 load_css()
 
 
@@ -628,7 +626,10 @@ def render_add_controls(folders, projects, paths):
 
     with upload_col:
         with st.popover("↑ Upload files", width="stretch"):
-            st.caption("PDFs, documents, datasets, or audio · max. 25 MB each")
+            st.caption(
+                "PDFs, documents, datasets, or audio · max. 10 files, "
+                "25 MB each, 100 MB per batch"
+            )
 
             with st.form("library_upload_form", clear_on_submit=True):
                 uploads = st.file_uploader(
@@ -664,31 +665,36 @@ def render_add_controls(folders, projects, paths):
                 if not uploads:
                     st.error("Choose at least one file.")
                 else:
-                    added = 0
+                    try:
+                        validated_uploads = validate_library_upload_batch(uploads)
+                    except (ValueError, RuntimeError) as exc:
+                        st.error(str(exc))
+                    else:
+                        added = 0
 
-                    for upload in uploads:
-                        saved_file = None
+                        for upload in validated_uploads:
+                            saved_file = None
 
-                        try:
-                            saved_file = save_library_upload(upload)
-                            item_id = create_library_item(
-                                **saved_file,
-                                folder_id=folder_id,
-                                status=status,
-                                tags=split_tags(tags),
-                                project_ids=project_ids,
-                            )
-                            st.session_state["library_selected_item_id"] = item_id
-                            added += 1
-                        except Exception as exc:
-                            if saved_file:
-                                delete_library_file(saved_file["file_path"])
+                            try:
+                                saved_file = save_library_upload(upload)
+                                item_id = create_library_item(
+                                    **saved_file,
+                                    folder_id=folder_id,
+                                    status=status,
+                                    tags=split_tags(tags),
+                                    project_ids=project_ids,
+                                )
+                                st.session_state["library_selected_item_id"] = item_id
+                                added += 1
+                            except Exception as exc:
+                                if saved_file:
+                                    delete_library_file(saved_file["file_path"])
 
-                            st.error(f"{upload.name}: {exc}")
+                                st.error(f"{upload.name}: {exc}")
 
-                    if added:
-                        st.toast(f"Added {added} file{'s' if added != 1 else ''}.")
-                        st.rerun()
+                        if added:
+                            st.toast(f"Added {added} file{'s' if added != 1 else ''}.")
+                            st.rerun()
 
     with paper_col:
         with st.popover("＋ Add paper", width="stretch"):
@@ -1050,51 +1056,40 @@ def render_library_list(folders, projects, paths):
             }.get,
         )
 
+    query_filters = {
+        "folder_id": filters.get("folder_id"),
+        "only_unfiled": filters.get("only_unfiled", False),
+        "status": filters.get("status", selected_status),
+        "project_id": selected_project_id,
+        "search": search,
+    }
+
     if collection == "papers" and selected_type == "All types":
-        all_items = [
-            *get_library_items(
-                search=search,
-                status=selected_status,
-                project_id=selected_project_id,
-                sort=selected_sort,
-                item_type="paper",
-            ),
-            *get_library_items(
-                search=search,
-                status=selected_status,
-                project_id=selected_project_id,
-                sort=selected_sort,
-                item_type="pdf",
-            ),
-        ]
-        reverse = selected_sort in ("newest", "year_desc")
-        sort_key = {
-            "newest": lambda item: (item["created_at"], item["id"]),
-            "oldest": lambda item: (item["created_at"], item["id"]),
-            "title": lambda item: (item["title"].casefold(), item["id"]),
-            "year_desc": lambda item: (item["publication_year"] or -1, item["title"].casefold()),
-            "year_asc": lambda item: (item["publication_year"] or 9999, item["title"].casefold()),
-        }[selected_sort]
-        all_items = sorted(all_items, key=sort_key, reverse=reverse)
+        query_filters["item_types"] = ("paper", "pdf")
     else:
-        query_type = filters.get("item_type", selected_type)
-        query_status = filters.get("status", selected_status)
-        all_items = get_library_items(
-            folder_id=filters.get("folder_id"),
-            only_unfiled=filters.get("only_unfiled", False),
-            item_type=query_type,
-            status=query_status,
-            project_id=selected_project_id,
-            search=search,
-            sort=selected_sort,
-        )
+        query_filters["item_type"] = filters.get("item_type", selected_type)
+
+    page_size = 8
+    total_items = get_library_item_count(**query_filters)
+    total_pages = max(1, math.ceil(total_items / page_size))
+    page_number = min(
+        max(int(st.session_state.get("library_page_number", 1)), 1),
+        total_pages,
+    )
+    st.session_state["library_page_number"] = page_number
+    page_items = get_library_items(
+        **query_filters,
+        sort=selected_sort,
+        limit=page_size,
+        offset=(page_number - 1) * page_size,
+    )
 
     with count_col:
-        st.caption(f"{len(all_items)} item{'s' if len(all_items) != 1 else ''}")
+        st.caption(f"{total_items} item{'s' if total_items != 1 else ''}")
 
     selected_ids = [
         item["id"]
-        for item in all_items
+        for item in page_items
         if st.session_state.get(f"library_select_item_{item['id']}")
     ]
 
@@ -1123,15 +1118,6 @@ def render_library_list(folders, projects, paths):
 
                 st.toast("Selected items moved.")
                 st.rerun()
-
-    page_size = 8
-    total_pages = max(1, math.ceil(len(all_items) / page_size))
-    page_number = min(
-        max(int(st.session_state.get("library_page_number", 1)), 1),
-        total_pages,
-    )
-    st.session_state["library_page_number"] = page_number
-    page_items = all_items[(page_number - 1) * page_size : page_number * page_size]
 
     if not page_items:
         render_html(
@@ -1174,6 +1160,34 @@ def render_library_list(folders, projects, paths):
                 st.rerun()
 
 
+@st.fragment
+def render_library_download(item):
+    """Read file bytes only after the user explicitly requests a download."""
+    if not st.button(
+        "Prepare download",
+        key=f"prepare_library_download_{item['id']}",
+        width="stretch",
+    ):
+        return
+
+    try:
+        with st.spinner("Preparing file..."):
+            file_bytes = read_library_file(item["file_path"])
+    except (FileNotFoundError, OSError, ValueError) as exc:
+        st.warning(str(exc))
+        return
+
+    st.download_button(
+        "↓ Download file",
+        data=file_bytes,
+        file_name=item["original_filename"] or item["title"],
+        mime=item["mime_type"] or "application/octet-stream",
+        key=f"library_download_{item['id']}",
+        on_click="ignore",
+        width="stretch",
+    )
+
+
 def render_details_panel(folders, projects, paths):
     render_html('<div class="library-details-scope"></div>')
     item_id = st.session_state.get("library_selected_item_id")
@@ -1208,17 +1222,7 @@ def render_details_panel(folders, projects, paths):
         file_col, size_col = st.columns([1, 0.46], gap="small")
 
         with file_col:
-            try:
-                file_bytes = read_library_file(item["file_path"])
-                st.download_button(
-                    "↓ Download file",
-                    data=file_bytes,
-                    file_name=item["original_filename"] or item["title"],
-                    mime=item["mime_type"] or "application/octet-stream",
-                    width="stretch",
-                )
-            except (FileNotFoundError, ValueError) as exc:
-                st.warning(str(exc))
+            render_library_download(item)
 
         with size_col:
             st.caption(format_file_size(item["file_size"]))
@@ -1530,6 +1534,10 @@ def _run_discovery_search(
     source_mode: str | None = None,
     sync_query_editor: bool = True,
 ):
+    # Keep network and AI dependencies off ordinary Library page loads.
+    from services.discovery_service import rank_discovery_results
+    from services.openalex_service import search_works_for_queries
+
     normalized_queries = [query.strip() for query in queries if query.strip()]
 
     if not normalized_queries:
@@ -1872,6 +1880,10 @@ def _render_discovery_search_controls(projects):
 
                 with st.spinner("AI is building the search strategy and ranking papers..."):
                     try:
+                        from services.bibliography_service import (
+                            generate_bibliography_search_profile,
+                        )
+
                         profile = generate_bibliography_search_profile(
                             project_name=project["name"],
                             project_domain=project["domain"],
@@ -1997,7 +2009,11 @@ def _render_add_discovered_paper(work, folders, projects, paths, project_id):
             )
 
             if duplicate:
-                st.info(f"Already saved as “{duplicate['title']}”.")
+                st.info(
+                    sanitize_untrusted_markdown(
+                        f"Already saved as “{duplicate['title']}”."
+                    )
+                )
             else:
                 try:
                     item_id = create_library_item(
@@ -2123,8 +2139,10 @@ def _render_discovery_result(work, folders, projects, paths, external_keys):
                 st.rerun()
 
         with source_col:
-            if work.get("url"):
-                st.link_button("Open source", work["url"], width="stretch")
+            source_url = safe_external_url(work.get("url"))
+
+            if source_url:
+                st.link_button("Open source", source_url, width="stretch")
 
         with save_col:
             if _discovery_work_is_saved(work, external_keys):
@@ -2166,7 +2184,9 @@ def _render_discovery_result(work, folders, projects, paths, external_keys):
                 st.info("OpenAlex does not provide an abstract for this paper.")
 
             if work.get("ai_limitations"):
-                st.caption(f"AI limitation: {work['ai_limitations']}")
+                render_untrusted_caption(
+                    f"AI limitation: {work['ai_limitations']}"
+                )
 
             _render_discovery_score_details(work)
 
@@ -2299,6 +2319,8 @@ def _submit_discovery_question(question: str, projects):
     })
 
     try:
+        from services.discovery_service import answer_question_about_discovery
+
         answer = answer_question_about_discovery(
             user_question=normalized_question,
             profile=st.session_state.get("discover_profile", {}),
@@ -2439,8 +2461,6 @@ st.session_state.setdefault("library_page_number", 1)
 
 folders = get_library_folders()
 projects = get_projects()
-_hydrate_discovery_state_from_database()
-stats = get_library_stats()
 paths = folder_paths(folders)
 
 top_brand_col, top_context_col, top_space_col, top_user_col = st.columns(
@@ -2490,31 +2510,39 @@ with page_col:
     with action_col:
         render_add_controls(folders, projects, paths)
 
-    my_library_tab, discover_tab = st.tabs(["My Library", "Discover papers"])
+    my_library_tab, discover_tab = st.tabs(
+        ["My Library", "Discover papers"],
+        key="library_primary_tab",
+        on_change="rerun",
+    )
 
-    with my_library_tab:
-        folder_col, list_col, details_col = st.columns(
-            [1.05, 2.75, 1.65],
-            gap="small",
-        )
+    if my_library_tab.open:
+        with my_library_tab:
+            stats = get_library_stats()
+            folder_col, list_col, details_col = st.columns(
+                [1.05, 2.75, 1.65],
+                gap="small",
+            )
 
-        with folder_col:
-            render_folder_panel(folders, stats, paths)
+            with folder_col:
+                render_folder_panel(folders, stats, paths)
 
-        with list_col:
-            render_library_list(folders, projects, paths)
+            with list_col:
+                render_library_list(folders, projects, paths)
 
-        with details_col:
-            render_details_panel(folders, projects, paths)
+            with details_col:
+                render_details_panel(folders, projects, paths)
 
-    with discover_tab:
-        discover_results_col, discover_chat_col = st.columns(
-            [3.05, 1.45],
-            gap="small",
-        )
+    if discover_tab.open:
+        with discover_tab:
+            _hydrate_discovery_state_from_database()
+            discover_results_col, discover_chat_col = st.columns(
+                [3.05, 1.45],
+                gap="small",
+            )
 
-        with discover_results_col:
-            _render_discovery_results(folders, projects, paths)
+            with discover_results_col:
+                _render_discovery_results(folders, projects, paths)
 
-        with discover_chat_col:
-            _render_discovery_chat(projects)
+            with discover_chat_col:
+                _render_discovery_chat(projects)

@@ -3,13 +3,17 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from db.database import get_db_path, init_db
+from db.database import get_db_path, init_db, init_db_once
 from db.library_queries import create_library_item, get_library_items
 from db.queries import create_project, get_projects
 from services.library_service import read_library_file, save_library_upload
 from services.manuscript_asset_service import get_manuscript_asset_storage_path
 from services.transcription_service import get_audio_storage_path
-from utils.user_scope import activate_user_scope, clear_user_scope
+from utils.user_scope import (
+    activate_user_scope,
+    allow_unscoped_paths,
+    clear_user_scope,
+)
 
 
 class FakeUpload:
@@ -87,9 +91,11 @@ class UserIsolationTestCase(unittest.TestCase):
         self.assertEqual(read_library_file(alice_upload["file_path"]), b"alice-private")
 
     def test_explicit_legacy_owner_keeps_pre_authentication_workspace(self):
-        init_db()
-        create_project("Legacy project", "Biology")
-        legacy_db = get_db_path()
+        with allow_unscoped_paths():
+            init_db()
+            create_project("Legacy project", "Biology")
+            legacy_db = get_db_path()
+
         os.environ["AUTH0_LEGACY_OWNER_SUB"] = "auth0|owner"
         os.environ["AUTH0_LEGACY_OWNER_ISSUER"] = "https://tenant.auth0.com/"
 
@@ -102,6 +108,19 @@ class UserIsolationTestCase(unittest.TestCase):
         init_db()
         self.assertNotEqual(get_db_path(), legacy_db)
         self.assertEqual(get_projects(), [])
+
+    def test_database_initialization_is_reused_per_scoped_path(self):
+        activate_user_scope("https://tenant.auth0.com/", "auth0|cached")
+        session_state = {}
+
+        self.assertTrue(init_db_once(session_state))
+        self.assertFalse(init_db_once(session_state))
+
+        database_path = Path(get_db_path())
+        database_path.unlink()
+
+        self.assertTrue(init_db_once(session_state))
+        self.assertTrue(database_path.is_file())
 
 
 if __name__ == "__main__":

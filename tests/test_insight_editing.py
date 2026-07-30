@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from db.database import init_db
+from utils.user_scope import activate_user_scope, clear_user_scope
 from db.queries import (
     create_chat,
     create_project,
@@ -24,6 +25,7 @@ class InsightEditingTestCase(unittest.TestCase):
         os.environ["DATABASE_PATH"] = str(
             Path(self.temp_dir.name) / "insights.db"
         )
+        activate_user_scope("https://tests.local", "insight-editing")
         init_db()
         self.project_id = create_project(
             "Insight editing",
@@ -35,6 +37,8 @@ class InsightEditingTestCase(unittest.TestCase):
         )
 
     def tearDown(self):
+        clear_user_scope()
+
         if self.previous_db_path is None:
             os.environ.pop("DATABASE_PATH", None)
         else:

@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 from uuid import uuid4
 
+from services.resource_limits import enforce_storage_quota, env_int
 from utils.user_scope import scoped_path
 
 
@@ -36,7 +37,12 @@ def get_library_storage_path() -> Path:
     storage_path = scoped_path(
         os.getenv("LIBRARY_STORAGE_PATH", "data/library")
     )
-    storage_path.mkdir(parents=True, exist_ok=True)
+    storage_path.mkdir(parents=True, exist_ok=True, mode=0o700)
+
+    try:
+        storage_path.chmod(0o700)
+    except OSError:
+        pass
 
     return storage_path
 
@@ -86,9 +92,26 @@ def save_library_upload(uploaded_file) -> dict:
     if file_size > MAX_LIBRARY_FILE_SIZE:
         raise ValueError("The file is larger than the 25 MB upload limit.")
 
+    storage_path = get_library_storage_path()
+    enforce_storage_quota(
+        storage_path,
+        file_size,
+        quota_bytes=env_int(
+            "MAX_LIBRARY_STORAGE_BYTES",
+            500 * 1024 * 1024,
+            minimum=MAX_LIBRARY_FILE_SIZE,
+        ),
+        label="library",
+        max_files=env_int("MAX_LIBRARY_STORED_FILES", 2000, maximum=10000),
+    )
     stored_filename = f"{uuid4().hex}{_safe_extension(original_filename)}"
-    file_path = get_library_storage_path() / stored_filename
+    file_path = storage_path / stored_filename
     file_path.write_bytes(file_bytes)
+
+    try:
+        file_path.chmod(0o600)
+    except OSError:
+        pass
     mime_type = (
         getattr(uploaded_file, "type", None)
         or mimetypes.guess_type(original_filename)[0]
@@ -103,6 +126,29 @@ def save_library_upload(uploaded_file) -> dict:
         "mime_type": mime_type,
         "file_size": file_size,
     }
+
+
+def validate_library_upload_batch(uploads) -> list:
+    normalized = list(uploads or [])
+    max_files = env_int("MAX_LIBRARY_FILES_PER_UPLOAD", 10, maximum=100)
+
+    if len(normalized) > max_files:
+        raise ValueError(f"Upload at most {max_files} files at a time.")
+
+    aggregate_size = sum(len(upload.getvalue()) for upload in normalized)
+    max_batch_bytes = env_int(
+        "MAX_LIBRARY_UPLOAD_BATCH_BYTES",
+        100 * 1024 * 1024,
+        minimum=MAX_LIBRARY_FILE_SIZE,
+    )
+
+    if aggregate_size > max_batch_bytes:
+        max_batch_mb = max_batch_bytes // (1024 * 1024)
+        raise ValueError(
+            f"The selected files exceed the {max_batch_mb} MB batch limit."
+        )
+
+    return normalized
 
 
 def read_library_file(file_path: str) -> bytes:

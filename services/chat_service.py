@@ -1,9 +1,10 @@
 from ai.factory import get_ai_provider
 from services.summary_service import format_messages_for_ai
+from utils.prompts import UNTRUSTED_CONTENT_RULES, untrusted_data, user_request
 
 
 def _format_rows_for_project_ai(rows, fields: tuple[str, ...]) -> str:
-    formatted = []
+    payload = []
 
     for row in rows or []:
         values = []
@@ -18,9 +19,13 @@ def _format_rows_for_project_ai(rows, fields: tuple[str, ...]) -> str:
                 values.append(f"{field}: {value}")
 
         if values:
-            formatted.append("\n".join(values))
+            payload.append({
+                field: row[field]
+                for field in fields
+                if field in row.keys() and row[field] is not None
+            })
 
-    return "\n---\n".join(formatted)
+    return untrusted_data(payload, "saved project context")
 
 
 def answer_question_about_project(
@@ -52,23 +57,20 @@ def answer_question_about_project(
         mindmap_edges,
         ("source_key", "target_key", "relation"),
     )
-    history_text = ""
-
-    if chat_history:
-        history_text = "\n".join(
-            f"{message.get('role', 'user')}: {message.get('content', '')}"
-            for message in chat_history[-12:]
-        )
+    history_text = untrusted_data(
+        list(chat_history or [])[-12:],
+        "AI chat history",
+    )
 
     prompt = f"""
 Ești Research Journal AI, un asistent care ajută cercetătorul să înțeleagă
 întregul proiect, nu doar un singur experiment.
 
 Proiect:
-{project_name}
+{untrusted_data(project_name, "project name")}
 
 Domeniu:
-{project_domain}
+{untrusted_data(project_domain, "project domain")}
 
 Notițe și transcrieri din toate experimentele:
 {notes_text or "Nu există notițe."}
@@ -86,10 +88,12 @@ Relații mind map:
 {edges_text or "Nu există relații în mind map."}
 
 Istoric conversație:
-{history_text or "Nu există istoric."}
+{history_text}
 
 Întrebarea utilizatorului:
-{user_question}
+{user_request(user_question, "current user question")}
+
+{UNTRUSTED_CONTENT_RULES}
 
 Răspunde în limba română.
 
@@ -117,17 +121,10 @@ def answer_question_about_experiment(
     ai = get_ai_provider()
 
     notes_text = format_messages_for_ai(notes)
-    history_text = ""
-
-    if chat_history:
-        history_parts = []
-
-        for message in chat_history[-12:]:
-            history_parts.append(
-                f"{message['role']}: {message['content']}"
-            )
-
-        history_text = "\n".join(history_parts)
+    history_text = untrusted_data(
+        list(chat_history or [])[-12:],
+        "AI chat history",
+    )
 
     prompt = f"""
 Ești Research Journal AI, un asistent pentru jurnal de cercetare.
@@ -136,22 +133,24 @@ Utilizatorul discută cu tine despre un singur experiment, iar sursa ta de adev�
 setul de notițe al acelui experiment.
 
 Proiect:
-{project_name}
+{untrusted_data(project_name, "project name")}
 
 Experiment:
-{chat_title}
+{untrusted_data(chat_title, "experiment title")}
 
 Obiectiv experiment:
-{chat_objective or "Nu este menționat."}
+{untrusted_data(chat_objective or "Nu este menționat.", "experiment objective")}
 
 Notițe disponibile în experiment:
 {notes_text or "Nu există încă notițe pentru acest experiment."}
 
 Istoric conversație AI:
-{history_text or "Nu există istoric."}
+{history_text}
 
 Întrebarea utilizatorului:
-{user_question}
+{user_request(user_question, "current user question")}
+
+{UNTRUSTED_CONTENT_RULES}
 
 Răspunde în limba română.
 
@@ -179,18 +178,10 @@ def answer_question_about_node(
 
     notes_text = format_messages_for_ai(messages)
 
-    history_text = ""
-
-    if chat_history:
-        parts = []
-
-        for message in chat_history:
-            role = message.get("role", "user")
-            content = message.get("content", "")
-
-            parts.append(f"{role}: {content}")
-
-        history_text = "\n".join(parts)
+    history_text = untrusted_data(
+        list(chat_history or [])[-12:],
+        "mind-map chat history",
+    )
 
     prompt = f"""
 Ești un asistent AI pentru un cercetător.
@@ -198,13 +189,13 @@ Ești un asistent AI pentru un cercetător.
 Utilizatorul a dat click pe un nod din mindmap și vrea să discute DOAR despre acel nod.
 
 Proiect:
-{project_name}
+{untrusted_data(project_name, "project name")}
 
 Nod selectat:
-{node_label}
+{untrusted_data(node_label, "selected node label")}
 
 Descriere nod:
-{node_description}
+{untrusted_data(node_description, "selected node description")}
 
 Istoric conversație pe acest nod:
 {history_text}
@@ -213,7 +204,9 @@ Notițe disponibile din proiect:
 {notes_text}
 
 Întrebarea utilizatorului:
-{user_question}
+{user_request(user_question, "current user question")}
+
+{UNTRUSTED_CONTENT_RULES}
 
 Răspunde în limba română.
 
