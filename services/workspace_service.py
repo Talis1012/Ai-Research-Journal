@@ -11,6 +11,7 @@ def _configured_workspace_paths() -> tuple[Path, ...]:
         scoped_path(os.getenv("DATABASE_PATH", "data/app.db")),
         scoped_path(os.getenv("AUDIO_STORAGE_PATH", "data/audio")),
         scoped_path(os.getenv("LIBRARY_STORAGE_PATH", "data/library")),
+        scoped_path(os.getenv("DATA_ANALYSIS_STORAGE_PATH", "data/analysis")),
         scoped_path(
             os.getenv(
                 "MANUSCRIPT_ASSET_STORAGE_PATH",

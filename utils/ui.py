@@ -1632,6 +1632,12 @@ def sidebar_nav(active_page: str = "experiments"):
     items = [
         ("experiments", "pages/1_Experiments.py", "🧪", "Experiments"),
         ("library", "pages/2_Library.py", "📚", "Library"),
+        (
+            "data_analysis",
+            "pages/4_Data_Analysis.py",
+            ":material/analytics:",
+            "Data Analysis",
+        ),
         ("paper_writing", "pages/3_Paper_Writing.py", "✍️", "Paper Writing"),
     ]
 

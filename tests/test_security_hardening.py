@@ -66,6 +66,7 @@ class SecurityHardeningTestCase(unittest.TestCase):
                 "RATE_LIMIT_DATABASE_PATH",
                 "AUDIO_STORAGE_PATH",
                 "LIBRARY_STORAGE_PATH",
+                "DATA_ANALYSIS_STORAGE_PATH",
                 "MANUSCRIPT_ASSET_STORAGE_PATH",
                 "MAX_AUDIO_DURATION_SECONDS",
                 "MAX_FIGURE_PIXELS",
@@ -77,6 +78,9 @@ class SecurityHardeningTestCase(unittest.TestCase):
         os.environ["RATE_LIMIT_DATABASE_PATH"] = str(root / "security-limits.db")
         os.environ["AUDIO_STORAGE_PATH"] = str(root / "data" / "audio")
         os.environ["LIBRARY_STORAGE_PATH"] = str(root / "data" / "library")
+        os.environ["DATA_ANALYSIS_STORAGE_PATH"] = str(
+            root / "data" / "analysis"
+        )
         os.environ["MANUSCRIPT_ASSET_STORAGE_PATH"] = str(
             root / "data" / "manuscript-assets"
         )
@@ -271,6 +275,7 @@ class SecurityHardeningTestCase(unittest.TestCase):
             scoped_path(os.environ["DATABASE_PATH"]),
             scoped_path(os.environ["AUDIO_STORAGE_PATH"]),
             scoped_path(os.environ["LIBRARY_STORAGE_PATH"]),
+            scoped_path(os.environ["DATA_ANALYSIS_STORAGE_PATH"]),
             scoped_path(os.environ["MANUSCRIPT_ASSET_STORAGE_PATH"]),
         ]
 

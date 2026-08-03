@@ -426,6 +426,53 @@ def init_db():
     """)
 
     # =========================
+    # DATA ANALYSIS
+    # =========================
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS analysis_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            library_item_id INTEGER,
+            source_kind TEXT NOT NULL,
+            source_name TEXT NOT NULL,
+            objective TEXT NOT NULL,
+            algorithm_key TEXT NOT NULL,
+            algorithm_label TEXT NOT NULL,
+            target_column TEXT,
+            feature_columns_json TEXT NOT NULL DEFAULT '[]',
+            parameters_json TEXT NOT NULL DEFAULT '{}',
+            preprocessing_json TEXT NOT NULL DEFAULT '{}',
+            row_count INTEGER NOT NULL DEFAULT 0,
+            column_count INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'running',
+            metrics_json TEXT NOT NULL DEFAULT '{}',
+            results_json TEXT NOT NULL DEFAULT '{}',
+            predictions_file_path TEXT,
+            report_file_path TEXT,
+            error_message TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            completed_at TIMESTAMP,
+
+            FOREIGN KEY (library_item_id)
+            REFERENCES library_items(id)
+            ON DELETE SET NULL,
+
+            CHECK (source_kind IN ('upload', 'library')),
+            CHECK (status IN ('running', 'completed', 'failed'))
+        )
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_analysis_runs_created
+        ON analysis_runs(created_at DESC, id DESC)
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_analysis_runs_library_item
+        ON analysis_runs(library_item_id)
+    """)
+
+    # =========================
     # PROJECT PAPER DISCOVERY
     # =========================
 

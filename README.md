@@ -2,7 +2,9 @@
 
 Aplicație Streamlit pentru organizarea proiectelor și experimentelor, observații
 scrise sau audio, transcrieri, rezumate, bibliotecă de cercetare, mindmap și
-redactarea lucrărilor asistată de AI.
+redactarea lucrărilor asistată de AI. Pagina Data Analysis poate importa
+dataseturi CSV, TSV, XLSX și JSON, rula fluxuri scikit-learn reproductibile și
+exporta predicțiile și raportul fiecărei analize.
 
 ## Autentificare Auth0
 
@@ -46,6 +48,7 @@ Fiecare identitate Auth0 primește automat:
 - o bază SQLite privată;
 - un director privat pentru fișierele audio;
 - un director privat pentru bibliotecă;
+- un director privat pentru rezultatele și rapoartele analizelor de date;
 - un director privat pentru figurile manuscriselor.
 
 Cheia directorului este un hash al claim-urilor OIDC `iss` și `sub`; emailul nu

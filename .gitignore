@@ -5,6 +5,7 @@ __pycache__/
 data/*.db
 data/audio/
 data/library/
+data/analysis/
 data/users/
 .streamlit/secrets.toml
 .DS_Store
