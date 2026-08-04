@@ -37,7 +37,7 @@ from services.library_service import (
     save_library_upload,
     validate_library_upload_batch,
 )
-from utils.auth import require_auth
+from utils.auth import authenticated_callback, require_auth
 from utils.content_safety import safe_external_url, sanitize_untrusted_markdown
 from utils.ui import (
     chat_message,
@@ -1161,6 +1161,7 @@ def render_library_list(folders, projects, paths):
 
 
 @st.fragment
+@authenticated_callback
 def render_library_download(item):
     """Read file bytes only after the user explicitly requests a download."""
     if not st.button(

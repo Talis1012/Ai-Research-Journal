@@ -37,7 +37,7 @@ from services.library_service import (
     read_library_file,
     save_library_upload,
 )
-from utils.auth import require_auth
+from utils.auth import authenticated_callback, require_auth
 from utils.ui import (
     header_icons,
     load_css,
@@ -1131,6 +1131,7 @@ def render_data_distributions(dataframe: pd.DataFrame | None, run: dict):
 
 
 @st.fragment
+@authenticated_callback
 def render_exports(run: dict):
     if not st.button(
         "Prepare exports",
