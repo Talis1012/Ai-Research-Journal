@@ -1,12 +1,34 @@
+import atexit
+import json
 import os
+import re
 import shutil
 import sqlite3
+from functools import lru_cache
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 from services.resource_limits import ResourceLimitError, env_int
-from utils.user_scope import scoped_path
+from utils.runtime_config import postgres_url, uses_postgres
+from utils.user_scope import get_user_scope, scoped_path
+
+
+try:
+    import psycopg
+    from psycopg_pool import ConnectionPool
+    from psycopg.rows import dict_row
+except ImportError:  # SQLite-only test and maintenance environments.
+    psycopg = None
+    ConnectionPool = None
+    dict_row = None
+
+
+DatabaseIntegrityError = (
+    (sqlite3.IntegrityError, psycopg.IntegrityError)
+    if psycopg is not None
+    else (sqlite3.IntegrityError,)
+)
 
 
 load_dotenv()
@@ -17,7 +39,283 @@ def get_db_path() -> str:
     return str(scoped_path(base_path))
 
 
-def get_connection():
+_IDENTITY_TABLES = {
+    "projects",
+    "chats",
+    "messages",
+    "experiment_ai_messages",
+    "audio_records",
+    "summaries",
+    "project_ideas",
+    "mindmap_nodes",
+    "mindmap_edges",
+    "mindmap_source_state",
+    "library_folders",
+    "library_items",
+    "library_tags",
+    "analysis_runs",
+    "project_discovery_set_papers",
+    "manuscripts",
+    "manuscript_sections",
+    "manuscript_evidence",
+    "manuscript_citations",
+    "manuscript_versions",
+    "manuscript_version_comments",
+    "manuscript_ai_messages",
+    "manuscript_assets",
+}
+
+
+def _postgres_dsn() -> str:
+    dsn = postgres_url()
+
+    if not dsn:
+        raise RuntimeError(
+            "Conexiunea PostgreSQL nu este configurată. Definește "
+            "`SUPABASE_DATABASE_URL` sau `[connections.supabase_postgres].url`."
+        )
+
+    # Streamlit/SQLAlchemy examples commonly include the driver suffix, while
+    # psycopg expects the standard PostgreSQL URI scheme.
+    return re.sub(r"^postgresql\+psycopg://", "postgresql://", dsn, count=1)
+
+
+def _replace_qmark_placeholders(statement: str) -> str:
+    output = []
+    quote = None
+    index = 0
+
+    while index < len(statement):
+        character = statement[index]
+
+        if quote:
+            output.append(character)
+
+            if character == quote:
+                if index + 1 < len(statement) and statement[index + 1] == quote:
+                    output.append(statement[index + 1])
+                    index += 1
+                else:
+                    quote = None
+        elif character in {"'", '"'}:
+            quote = character
+            output.append(character)
+        elif character == "?":
+            output.append("%s")
+        else:
+            output.append(character)
+
+        index += 1
+
+    return "".join(output)
+
+
+def _translate_postgres_sql(statement: str) -> str:
+    translated = statement
+    ignored_insert = bool(
+        re.search(r"\bINSERT\s+OR\s+IGNORE\s+INTO\b", translated, re.I)
+    )
+    translated = re.sub(
+        r"\bINSERT\s+OR\s+IGNORE\s+INTO\b",
+        "INSERT INTO",
+        translated,
+        flags=re.I,
+    )
+    translated = re.sub(r"\s+COLLATE\s+NOCASE\b", "", translated, flags=re.I)
+    translated = re.sub(r"\bLIKE\b", "ILIKE", translated, flags=re.I)
+    translated = re.sub(
+        r"ON\s+CONFLICT\s*\(\s*project_id\s*,\s*node_key\s*\)",
+        "ON CONFLICT(user_id, project_id, node_key)",
+        translated,
+        flags=re.I,
+    )
+    translated = re.sub(
+        r"ON\s+CONFLICT\s*\(\s*project_id\s*,\s*source_type\s*,\s*source_id\s*\)",
+        "ON CONFLICT(user_id, project_id, source_type, source_id)",
+        translated,
+        flags=re.I,
+    )
+
+    if ignored_insert and not re.search(r"\bON\s+CONFLICT\b", translated, re.I):
+        translated = translated.rstrip().rstrip(";") + " ON CONFLICT DO NOTHING"
+
+    return _replace_qmark_placeholders(translated)
+
+
+def _insert_table(statement: str) -> str | None:
+    match = re.match(
+        r"\s*INSERT\s+INTO\s+(?:public\.)?([a-zA-Z_][a-zA-Z0-9_]*)",
+        statement,
+        re.I,
+    )
+    return match.group(1).lower() if match else None
+
+
+class _PostgresCursor:
+    def __init__(self, connection, cursor=None):
+        self._connection = connection
+        self._cursor = cursor or connection._raw.cursor()
+        self._lastrowid = None
+
+    def execute(self, statement, params=None):
+        self._connection._ensure_request_context()
+        translated = _translate_postgres_sql(str(statement))
+        table = _insert_table(translated)
+
+        if table in _IDENTITY_TABLES and not re.search(
+            r"\bRETURNING\b",
+            translated,
+            re.I,
+        ):
+            translated = translated.rstrip().rstrip(";") + " RETURNING id"
+
+        self._cursor.execute(translated, params or ())
+        self._lastrowid = None
+
+        if table in _IDENTITY_TABLES:
+            returned = self._cursor.fetchone()
+
+            if returned:
+                self._lastrowid = int(returned["id"])
+
+        return self
+
+    def executemany(self, statement, params_seq):
+        self._connection._ensure_request_context()
+        self._cursor.executemany(
+            _translate_postgres_sql(str(statement)),
+            params_seq,
+        )
+        self._lastrowid = None
+        return self
+
+    def fetchone(self):
+        return self._cursor.fetchone()
+
+    def fetchall(self):
+        return self._cursor.fetchall()
+
+    @property
+    def lastrowid(self):
+        return self._lastrowid
+
+    @property
+    def rowcount(self):
+        return self._cursor.rowcount
+
+    def close(self):
+        self._cursor.close()
+
+
+class _PostgresConnection:
+    def __init__(self, raw, pool):
+        self._raw = raw
+        self._pool = pool
+        self._context_ready = False
+        self._closed = False
+
+    def _ensure_request_context(self):
+        if self._context_ready:
+            return
+
+        scope = get_user_scope()
+
+        if scope is None:
+            raise RuntimeError(
+                "A PostgreSQL connection requires an authenticated user scope."
+            )
+
+        claims = dict(scope.claims)
+        claims["iss"] = scope.issuer
+        claims["sub"] = scope.subject
+        claims.setdefault("role", "authenticated")
+
+        with self._raw.cursor() as cursor:
+            cursor.execute(
+                "select set_config('request.jwt.claims', %s, true)",
+                (json.dumps(claims, separators=(",", ":")),),
+            )
+            cursor.execute("set local role authenticated")
+            user_row = cursor.execute(
+                "select app_private.current_app_user_id() as id"
+            ).fetchone()
+
+            if not user_row or user_row["id"] is None:
+                cursor.execute("select public.ensure_current_app_user() as id")
+
+        self._context_ready = True
+
+    def cursor(self):
+        return _PostgresCursor(self)
+
+    def execute(self, statement, params=None):
+        return self.cursor().execute(statement, params)
+
+    def executemany(self, statement, params_seq):
+        return self.cursor().executemany(statement, params_seq)
+
+    def commit(self):
+        self._raw.commit()
+        self._context_ready = False
+
+    def rollback(self):
+        self._raw.rollback()
+        self._context_ready = False
+
+    def close(self):
+        if self._closed:
+            return
+
+        try:
+            self._raw.rollback()
+        finally:
+            self._context_ready = False
+            self._closed = True
+            self._pool.putconn(self._raw)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if exc_type is None:
+            self.commit()
+        else:
+            self.rollback()
+        return False
+
+
+@lru_cache(maxsize=2)
+def _postgres_pool(dsn: str):
+    pool = ConnectionPool(
+        conninfo=dsn,
+        min_size=0,
+        max_size=env_int("MAX_POSTGRES_POOL_SIZE", 8, maximum=32),
+        timeout=10,
+        max_lifetime=1800,
+        max_idle=300,
+        kwargs={
+            "row_factory": dict_row,
+            "connect_timeout": 10,
+            "application_name": "research-journal-streamlit",
+        },
+        open=True,
+    )
+    atexit.register(pool.close)
+    return pool
+
+
+def _get_postgres_connection():
+    if psycopg is None or ConnectionPool is None:
+        raise RuntimeError(
+            "Driverul PostgreSQL lipsește. Instalează dependențele din requirements.txt."
+        )
+
+    pool = _postgres_pool(_postgres_dsn())
+    raw = pool.getconn(timeout=10)
+    return _PostgresConnection(raw, pool)
+
+
+def _get_sqlite_connection():
     db_path = get_db_path()
     db_parent = Path(db_path).parent
 
@@ -59,6 +357,39 @@ def get_connection():
     return conn
 
 
+def get_connection():
+    if uses_postgres():
+        return _get_postgres_connection()
+
+    return _get_sqlite_connection()
+
+
+def get_current_app_user_id() -> str:
+    if not uses_postgres():
+        scope = get_user_scope()
+
+        if scope is None:
+            raise RuntimeError("An authenticated user scope is required.")
+
+        return scope.storage_key
+
+    conn = get_connection()
+
+    try:
+        row = conn.execute(
+            "SELECT public.ensure_current_app_user() AS id"
+        ).fetchone()
+
+        if not row or row["id"] is None:
+            raise RuntimeError("Supabase could not resolve the authenticated user.")
+
+        resolved = str(row["id"])
+        conn.commit()
+        return resolved
+    finally:
+        conn.close()
+
+
 def init_db_once(session_state) -> bool:
     """Initialize the active user's database once per browser session.
 
@@ -66,6 +397,15 @@ def init_db_once(session_state) -> bool:
     cannot reuse another user's initialization state. If the workspace was
     deleted during the session, the missing file forces initialization again.
     """
+    if uses_postgres():
+        user_id = get_current_app_user_id()
+        state_key = "_initialized_postgres_users"
+        initialized_users = set(session_state.get(state_key, ()))
+        was_initialized = user_id in initialized_users
+        initialized_users.add(user_id)
+        session_state[state_key] = tuple(sorted(initialized_users))
+        return not was_initialized
+
     db_path = get_db_path()
     state_key = "_initialized_database_paths"
     initialized_paths = set(session_state.get(state_key, ()))
@@ -80,6 +420,10 @@ def init_db_once(session_state) -> bool:
 
 
 def init_db():
+    if uses_postgres():
+        get_current_app_user_id()
+        return
+
     conn = get_connection()
     cur = conn.cursor() # Cursorul este obiectul prin care trimiți comenzi SQL către baza de date.
 

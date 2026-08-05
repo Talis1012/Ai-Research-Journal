@@ -1,5 +1,6 @@
 import io
 import os
+import tempfile
 import wave
 from pathlib import Path
 from uuid import uuid4
@@ -12,6 +13,14 @@ from services.resource_limits import (
     enforce_storage_quota,
     env_int,
 )
+from services.supabase_storage import (
+    delete_object,
+    download_bytes,
+    enforce_user_storage_quota,
+    is_storage_reference,
+    upload_bytes,
+)
+from utils.runtime_config import uses_supabase_storage
 from utils.user_scope import scoped_path
 
 
@@ -40,6 +49,31 @@ def get_whisper_model():
 def save_audio_file(audio_file, chat_id: int) -> str:
     audio_bytes = audio_file.getvalue()
     validate_wav_bytes(audio_bytes)
+    unique_name = f"chat_{chat_id}_{uuid4().hex}.wav"
+
+    if uses_supabase_storage():
+        enforce_user_storage_quota(
+            "audio",
+            len(audio_bytes),
+            quota_bytes=env_int(
+                "MAX_AUDIO_STORAGE_BYTES",
+                250 * 1024 * 1024,
+                minimum=env_int("MAX_AUDIO_FILE_SIZE", 25 * 1024 * 1024),
+            ),
+            label="audio",
+            max_files=env_int(
+                "MAX_STORED_AUDIO_FILES",
+                500,
+                maximum=5000,
+            ),
+        )
+        return upload_bytes(
+            "audio",
+            unique_name,
+            audio_bytes,
+            content_type="audio/wav",
+        )
+
     audio_dir = get_audio_storage_path()
     audio_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     enforce_storage_quota(
@@ -54,7 +88,6 @@ def save_audio_file(audio_file, chat_id: int) -> str:
         max_files=env_int("MAX_STORED_AUDIO_FILES", 500, maximum=5000),
     )
 
-    unique_name = f"chat_{chat_id}_{uuid4().hex}.wav"
     file_path = audio_dir / unique_name
 
     with open(file_path, "wb") as f:
@@ -156,11 +189,15 @@ def _path_inside_audio_storage(file_path: str | Path) -> Path:
 
 
 def transcribe_audio(audio_path: str, language: str | None = None) -> str:
-    safe_path = _path_inside_audio_storage(audio_path)
     max_size = env_int("MAX_AUDIO_FILE_SIZE", 25 * 1024 * 1024)
 
-    with safe_path.open("rb") as audio_stream:
-        audio_bytes = audio_stream.read(max_size + 1)
+    if is_storage_reference(audio_path):
+        audio_bytes = download_bytes(audio_path, bucket="audio")
+    else:
+        safe_path = _path_inside_audio_storage(audio_path)
+
+        with safe_path.open("rb") as audio_stream:
+            audio_bytes = audio_stream.read(max_size + 1)
 
     validate_wav_bytes(audio_bytes)
     consume_rate_limit(
@@ -197,11 +234,16 @@ def transcribe_audio(audio_path: str, language: str | None = None) -> str:
         lease_seconds=3600,
     ):
         model = get_whisper_model()
-        segments, _ = model.transcribe(
-            str(safe_path),
-            language=language,
-            beam_size=env_int("WHISPER_BEAM_SIZE", 3, maximum=5),
-        )
+
+        if is_storage_reference(audio_path):
+            temporary_audio = tempfile.NamedTemporaryFile(suffix=".wav")
+            temporary_audio.write(audio_bytes)
+            temporary_audio.flush()
+            model_path = temporary_audio.name
+        else:
+            temporary_audio = None
+            model_path = str(safe_path)
+
         transcript_parts = []
         transcript_chars = 0
         max_transcript_chars = env_int(
@@ -210,23 +252,49 @@ def transcribe_audio(audio_path: str, language: str | None = None) -> str:
             maximum=500_000,
         )
 
-        for segment in segments:
-            part = segment.text.strip()
+        try:
+            segments, _ = model.transcribe(
+                model_path,
+                language=language,
+                beam_size=env_int("WHISPER_BEAM_SIZE", 3, maximum=5),
+            )
 
-            if not part:
-                continue
+            for segment in segments:
+                part = segment.text.strip()
 
-            transcript_chars += len(part) + 1
+                if not part:
+                    continue
 
-            if transcript_chars > max_transcript_chars:
-                raise ValueError("The generated transcript is too long to store safely.")
+                transcript_chars += len(part) + 1
 
-            transcript_parts.append(part)
+                if transcript_chars > max_transcript_chars:
+                    raise ValueError("The generated transcript is too long to store safely.")
+
+                transcript_parts.append(part)
+        finally:
+            if temporary_audio is not None:
+                temporary_audio.close()
 
     return " ".join(transcript_parts).strip()
 
 
+def read_audio_file(file_path: str) -> bytes:
+    if is_storage_reference(file_path):
+        return download_bytes(file_path, bucket="audio")
+
+    path = _path_inside_audio_storage(file_path)
+
+    if not path.is_file():
+        raise FileNotFoundError("The stored audio recording could not be found.")
+
+    return path.read_bytes()
+
+
 def delete_audio_file(file_path: str):
+    if is_storage_reference(file_path):
+        delete_object(file_path, bucket="audio")
+        return
+
     path = _path_inside_audio_storage(file_path)
 
     if path.exists() and path.is_file():

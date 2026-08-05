@@ -9,6 +9,16 @@ from uuid import uuid4
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from services.resource_limits import enforce_storage_quota, env_int
+from services.supabase_storage import (
+    delete_object,
+    delete_user_objects,
+    download_bytes,
+    enforce_user_storage_quota,
+    is_storage_reference,
+    storage_object_size,
+    upload_bytes,
+)
+from utils.runtime_config import uses_supabase_storage
 from utils.user_scope import scoped_path
 
 
@@ -103,42 +113,81 @@ def save_figure_upload(
         if len(normalized_bytes) > max_normalized_size:
             raise ValueError("The normalized figure is too large to store.")
 
-        asset_root = get_manuscript_asset_storage_path()
-        replaced_size = 0
+        if uses_supabase_storage():
+            replaced_size = (
+                storage_object_size(
+                    replacing_storage_path,
+                    bucket="manuscript-assets",
+                )
+                if replacing_storage_path
+                and is_storage_reference(replacing_storage_path)
+                else 0
+            )
+            enforce_user_storage_quota(
+                "manuscript-assets",
+                len(normalized_bytes),
+                quota_bytes=env_int(
+                    "MAX_MANUSCRIPT_ASSET_STORAGE_BYTES",
+                    250 * 1024 * 1024,
+                    minimum=max_normalized_size,
+                ),
+                label="manuscript figure",
+                max_files=env_int(
+                    "MAX_STORED_MANUSCRIPT_FIGURES",
+                    500,
+                    maximum=5000,
+                ),
+                reclaim_bytes=replaced_size,
+                replacing_files=1 if replaced_size > 0 else 0,
+            )
+            storage_path = upload_bytes(
+                "manuscript-assets",
+                f"manuscripts/{int(manuscript_id)}/{uuid4().hex}.png",
+                normalized_bytes,
+                content_type="image/png",
+            )
 
-        if replacing_storage_path:
-            replaced_path = _path_inside_asset_storage(replacing_storage_path)
+            if replacing_storage_path and is_storage_reference(replacing_storage_path):
+                delete_object(replacing_storage_path, bucket="manuscript-assets")
+        else:
+            asset_root = get_manuscript_asset_storage_path()
+            replaced_size = 0
 
-            if replaced_path.is_file():
-                replaced_size = replaced_path.stat().st_size
+            if replacing_storage_path:
+                replaced_path = _path_inside_asset_storage(replacing_storage_path)
 
-        enforce_storage_quota(
-            asset_root,
-            len(normalized_bytes),
-            quota_bytes=env_int(
-                "MAX_MANUSCRIPT_ASSET_STORAGE_BYTES",
-                250 * 1024 * 1024,
-                minimum=max_normalized_size,
-            ),
-            label="manuscript figure",
-            max_files=env_int(
-                "MAX_STORED_MANUSCRIPT_FIGURES",
-                500,
-                maximum=5000,
-            ),
-            reclaim_bytes=replaced_size,
-            replacing_file=replaced_size > 0,
-        )
-        target_dir = asset_root / str(int(manuscript_id))
-        target_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-        target_path = target_dir / f"{uuid4().hex}.png"
-        target_path.write_bytes(normalized_bytes)
+                if replaced_path.is_file():
+                    replaced_size = replaced_path.stat().st_size
 
-        try:
-            target_dir.chmod(0o700)
-            target_path.chmod(0o600)
-        except OSError:
-            pass
+            enforce_storage_quota(
+                asset_root,
+                len(normalized_bytes),
+                quota_bytes=env_int(
+                    "MAX_MANUSCRIPT_ASSET_STORAGE_BYTES",
+                    250 * 1024 * 1024,
+                    minimum=max_normalized_size,
+                ),
+                label="manuscript figure",
+                max_files=env_int(
+                    "MAX_STORED_MANUSCRIPT_FIGURES",
+                    500,
+                    maximum=5000,
+                ),
+                reclaim_bytes=replaced_size,
+                replacing_file=replaced_size > 0,
+            )
+            target_dir = asset_root / str(int(manuscript_id))
+            target_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+            target_path = target_dir / f"{uuid4().hex}.png"
+            target_path.write_bytes(normalized_bytes)
+
+            try:
+                target_dir.chmod(0o700)
+                target_path.chmod(0o600)
+            except OSError:
+                pass
+
+            storage_path = str(target_path)
     except (
         Image.DecompressionBombError,
         Image.DecompressionBombWarning,
@@ -149,17 +198,20 @@ def save_figure_upload(
 
     return {
         "original_filename": original_filename,
-        "storage_path": str(target_path),
+        "storage_path": storage_path,
         "mime_type": "image/png",
         "content": {
             "width": width,
             "height": height,
-            "file_size": target_path.stat().st_size,
+            "file_size": len(normalized_bytes),
         },
     }
 
 
 def read_manuscript_asset_file(storage_path: str) -> bytes:
+    if is_storage_reference(storage_path):
+        return download_bytes(storage_path, bucket="manuscript-assets")
+
     safe_path = _path_inside_asset_storage(storage_path)
 
     if not safe_path.is_file():
@@ -170,6 +222,10 @@ def read_manuscript_asset_file(storage_path: str) -> bytes:
 
 def delete_manuscript_asset_file(storage_path: str | None):
     if not storage_path:
+        return
+
+    if is_storage_reference(storage_path):
+        delete_object(storage_path, bucket="manuscript-assets")
         return
 
     safe_path = _path_inside_asset_storage(storage_path)
@@ -188,6 +244,13 @@ def delete_manuscript_asset_file(storage_path: str | None):
 
 
 def delete_manuscript_asset_directory(manuscript_id: int):
+    if uses_supabase_storage():
+        delete_user_objects(
+            "manuscript-assets",
+            f"manuscripts/{int(manuscript_id)}",
+        )
+        return
+
     directory = _path_inside_asset_storage(
         get_manuscript_asset_storage_path() / str(int(manuscript_id))
     )

@@ -4,6 +4,8 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
+from typing import Mapping
 
 
 @dataclass(frozen=True)
@@ -11,6 +13,7 @@ class UserScope:
     issuer: str
     subject: str
     storage_key: str
+    claims: Mapping[str, object]
 
 
 _current_user_scope: ContextVar[UserScope | None] = ContextVar(
@@ -23,7 +26,12 @@ _allow_unscoped_paths: ContextVar[bool] = ContextVar(
 )
 
 
-def activate_user_scope(issuer: str, subject: str) -> UserScope:
+def activate_user_scope(
+    issuer: str,
+    subject: str,
+    *,
+    claims: dict | None = None,
+) -> UserScope:
     normalized_issuer = str(issuer or "").strip().rstrip("/")
     normalized_subject = str(subject or "").strip()
 
@@ -37,6 +45,7 @@ def activate_user_scope(issuer: str, subject: str) -> UserScope:
         issuer=normalized_issuer,
         subject=normalized_subject,
         storage_key=digest[:24],
+        claims=MappingProxyType(dict(claims or {})),
     )
     _current_user_scope.set(scope)
     return scope

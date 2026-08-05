@@ -20,6 +20,9 @@ def _json_dump(value) -> str:
 
 
 def _json_load(value: str | None, fallback):
+    if isinstance(value, (dict, list)):
+        return value
+
     try:
         loaded = json.loads(value or "")
     except (TypeError, ValueError, json.JSONDecodeError):

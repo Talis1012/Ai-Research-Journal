@@ -1005,9 +1005,59 @@ def save_analysis_artifacts(
     predictions: pd.DataFrame,
     report_markdown: str,
 ) -> dict:
-    root = get_analysis_storage_path()
     predictions_bytes = predictions_csv_bytes(predictions)
     report_bytes = report_markdown.encode("utf-8")
+
+    from services.supabase_storage import (
+        delete_object,
+        enforce_user_storage_quota,
+        upload_bytes,
+    )
+    from utils.runtime_config import uses_supabase_storage
+
+    if uses_supabase_storage():
+        enforce_user_storage_quota(
+            "analysis-artifacts",
+            len(predictions_bytes) + len(report_bytes),
+            quota_bytes=env_int(
+                "MAX_ANALYSIS_STORAGE_BYTES",
+                250 * 1024 * 1024,
+                minimum=1024 * 1024,
+            ),
+            label="analysis",
+            max_files=env_int(
+                "MAX_STORED_ANALYSIS_FILES",
+                1_000,
+                maximum=10_000,
+            ),
+            incoming_files=2,
+        )
+        predictions_path = upload_bytes(
+            "analysis-artifacts",
+            f"run-{int(run_id)}/predictions.csv",
+            predictions_bytes,
+            content_type="text/csv",
+            upsert=True,
+        )
+
+        try:
+            report_path = upload_bytes(
+                "analysis-artifacts",
+                f"run-{int(run_id)}/report.md",
+                report_bytes,
+                content_type="text/markdown",
+                upsert=True,
+            )
+        except Exception:
+            delete_object(predictions_path, bucket="analysis-artifacts")
+            raise
+
+        return {
+            "predictions_file_path": predictions_path,
+            "report_file_path": report_path,
+        }
+
+    root = get_analysis_storage_path()
     enforce_storage_quota(
         root,
         len(predictions_bytes) + len(report_bytes),
@@ -1035,6 +1085,11 @@ def save_analysis_artifacts(
 
 
 def read_analysis_artifact(path: str) -> bytes:
+    from services.supabase_storage import download_bytes, is_storage_reference
+
+    if is_storage_reference(path):
+        return download_bytes(path, bucket="analysis-artifacts")
+
     safe_path = _safe_analysis_path(path)
 
     if not safe_path.is_file():

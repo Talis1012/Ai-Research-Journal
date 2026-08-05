@@ -1,10 +1,9 @@
 import math
-import sqlite3
 from datetime import datetime
 
 import streamlit as st
 
-from db.database import init_db_once
+from db.database import DatabaseIntegrityError, init_db_once
 from db.discovery_queries import (
     get_latest_project_discovery_results,
     get_project_discovery_results,
@@ -757,7 +756,7 @@ def render_add_controls(folders, projects, paths):
                     st.session_state["library_selected_item_id"] = item_id
                     st.toast("Paper added to My Library.")
                     st.rerun()
-                except sqlite3.IntegrityError:
+                except DatabaseIntegrityError:
                     st.error("A paper with this DOI is already in My Library.")
                 except Exception as exc:
                     st.error(str(exc))
@@ -803,7 +802,7 @@ def render_folder_panel(folders, stats, paths):
                     st.session_state["library_collection"] = f"folder:{folder_id}"
                     st.toast("Folder created.")
                     st.rerun()
-                except sqlite3.IntegrityError:
+                except DatabaseIntegrityError:
                     st.error("A folder with this name already exists here.")
                 except Exception as exc:
                     st.error(str(exc))
@@ -871,7 +870,7 @@ def render_folder_panel(folders, stats, paths):
                 rename_library_folder(folder_id, new_name)
                 st.toast("Folder renamed.")
                 st.rerun()
-            except sqlite3.IntegrityError:
+            except DatabaseIntegrityError:
                 st.error("A folder with this name already exists here.")
             except Exception as exc:
                 st.error(str(exc))
@@ -1316,7 +1315,7 @@ def render_details_panel(folders, projects, paths):
             )
             st.toast("Library item updated.")
             st.rerun()
-        except sqlite3.IntegrityError:
+        except DatabaseIntegrityError:
             st.error("A different paper with this DOI is already in My Library.")
         except Exception as exc:
             st.error(str(exc))
@@ -2036,7 +2035,7 @@ def _render_add_discovered_paper(work, folders, projects, paths, project_id):
                     st.session_state["library_selected_item_id"] = item_id
                     st.toast("Paper added to My Library.")
                     st.rerun()
-                except sqlite3.IntegrityError:
+                except DatabaseIntegrityError:
                     st.info("This paper is already in My Library.")
                 except Exception as exc:
                     st.error(str(exc))

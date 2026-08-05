@@ -2,7 +2,10 @@ import os
 import shutil
 from pathlib import Path
 
+from db.database import get_connection
 from services.resource_limits import purge_current_principal_usage
+from services.supabase_storage import ALLOWED_BUCKETS, delete_user_objects
+from utils.runtime_config import uses_postgres, uses_supabase_storage
 from utils.user_scope import get_user_scope, scoped_path
 
 
@@ -53,6 +56,22 @@ def current_user_workspace_roots() -> tuple[Path, ...]:
 
 
 def delete_current_user_workspace():
+    if uses_postgres():
+        if uses_supabase_storage():
+            # Storage RLS can resolve the owner only while app_users still
+            # contains the identity, so objects must be removed first.
+            for bucket in sorted(ALLOWED_BUCKETS):
+                delete_user_objects(bucket)
+
+        conn = get_connection()
+
+        try:
+            conn.execute("SELECT public.delete_current_workspace()")
+            conn.commit()
+        finally:
+            conn.close()
+        return
+
     roots = current_user_workspace_roots()
     purge_current_principal_usage()
 

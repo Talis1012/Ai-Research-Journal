@@ -15,6 +15,9 @@ def _json_loads(value: str | None, default):
     if not value:
         return default
 
+    if isinstance(value, (dict, list)):
+        return value
+
     try:
         return json.loads(value)
     except (TypeError, ValueError):

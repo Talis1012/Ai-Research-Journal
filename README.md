@@ -6,6 +6,19 @@ redactarea lucrărilor asistată de AI. Pagina Data Analysis poate importa
 dataseturi CSV, TSV, XLSX și JSON, rula fluxuri scikit-learn reproductibile și
 exporta predicțiile și raportul fiecărei analize.
 
+## Arhitectură cloud
+
+În Streamlit, aplicația folosește:
+
+- Auth0 pentru autentificare OIDC;
+- PostgreSQL Supabase pentru toate datele aplicației;
+- Supabase Storage pentru audio, Library, artefactele analizelor și imaginile
+  manuscriselor;
+- RLS bazat pe perechea verificată `iss` + `sub`, nu pe email.
+
+SQLite și directoarele locale rămân disponibile ca backend de test/fallback.
+Nu există migrare de date vechi în fluxul cloud; schema Supabase pornește goală.
+
 ## Autentificare Auth0
 
 Aplicația folosește autentificarea OIDC nativă din Streamlit. Auth0 gestionează
@@ -19,10 +32,20 @@ crearea contului, autentificarea, verificarea emailului și recuperarea parolei.
 2. Activează o Database Connection și lasă activată opțiunea de self-service
    signup dacă utilizatorii trebuie să-și poată crea singuri conturi.
 3. Adaugă în **Allowed Callback URLs**:
-   `http://localhost:8501/oauth2callback`.
+   `http://localhost:8501/oauth2callback` și
+   `https://ai-research-journal-vlad.streamlit.app/oauth2callback`.
 4. Adaugă în **Allowed Logout URLs** și **Allowed Web Origins**:
-   `http://localhost:8501`.
-5. Pentru producție, adaugă aceleași URL-uri folosind domeniul HTTPS public.
+   `http://localhost:8501` și
+   `https://ai-research-journal-vlad.streamlit.app`.
+5. Creează un Action **Post Login**, adaugă-l în Login Flow și folosește:
+
+```javascript
+exports.onExecutePostLogin = async (event, api) => {
+  api.idToken.setCustomClaim('role', 'authenticated');
+};
+```
+
+Claimul trebuie să aibă cheia literală `role` și să fie pus în ID token.
 
 ### 2. Configurează secretele Streamlit
 
@@ -30,9 +53,14 @@ crearea contului, autentificarea, verificarea emailului și recuperarea parolei.
 cp .streamlit/secrets.toml.example .streamlit/secrets.toml
 ```
 
-Completează `client_id`, `client_secret` și domeniul Auth0. Generează un
-`cookie_secret` separat, de exemplu cu `openssl rand -hex 32`. Fișierul real
-`secrets.toml` este ignorat de Git și nu trebuie publicat.
+Completează valorile Auth0 și Supabase. Generează un `cookie_secret` separat,
+de exemplu cu `openssl rand -hex 32`. Păstrează obligatoriu
+`expose_tokens = "id"`; ID tokenul este folosit numai server-side pentru
+Supabase Storage. Fișierul real este ignorat de Git și nu trebuie publicat.
+
+URL-ul PostgreSQL trebuie să fie cel de **Session pooler**, cu `sslmode=require`.
+Driverul acceptă și forma Streamlit/SQLAlchemy
+`postgresql+psycopg://...`.
 
 Instalează dependențele și pornește aplicația:
 
@@ -41,42 +69,37 @@ python -m pip install -r requirements.txt
 streamlit run app.py
 ```
 
-### Izolarea datelor
+### Schema Supabase
 
-Fiecare identitate Auth0 primește automat:
+Migrațiile sunt în `supabase/migrations/`. Pentru un proiect nou:
 
-- o bază SQLite privată;
-- un director privat pentru fișierele audio;
-- un director privat pentru bibliotecă;
-- un director privat pentru rezultatele și rapoartele analizelor de date;
-- un director privat pentru figurile manuscriselor.
-
-Cheia directorului este un hash al claim-urilor OIDC `iss` și `sub`; emailul nu
-este folosit ca identificator deoarece se poate modifica.
-
-Datele create înainte de activarea autentificării rămân în locațiile vechi. Ca
-să le atribui explicit contului proprietar, setează în `.env`:
-
-```dotenv
-AUTH0_LEGACY_OWNER_SUB=auth0|user-id-din-auth0
-AUTH0_LEGACY_OWNER_ISSUER=https://domeniul-tau.auth0.com/
+```bash
+supabase login
+supabase link --project-ref YOUR_PROJECT_REF
+supabase db push --dry-run
+supabase db push
+supabase db lint --linked --level warning
 ```
 
-Valorile se găsesc în profilul utilizatorului din Auth0 Dashboard. Fără această
-configurație, niciun cont autentificat nu primește automat datele vechi.
+Migrațiile creează toate tabelele, funcțiile de identitate, RLS, contoarele
+centralizate de rate-limit, ștergerea workspace-ului și bucket-urile private:
+`audio`, `library`, `analysis-artifacts`, `manuscript-assets`.
+
+### Izolarea datelor
+
+La prima cerere, `ensure_current_app_user()` creează profilul aplicației din
+claimurile Auth0 verificate. Fiecare tabel are `user_id`, relații tenant-safe și
+RLS forțat. Obiectele Storage sunt salvate numai sub
+`users/<app_user_uuid>/...`, iar politicile verifică același UUID.
 
 Utilizatorii pot șterge definitiv spațiul lor de lucru din meniul contului.
-Operația elimină baza de date și toate fișierele audio, documentele și figurile
-din directoarele asociate identității lor. Pentru proprietarul configurat în
-modul legacy, ștergerea automată este dezactivată pentru a evita eliminarea unui
-director vechi configurat prea larg.
+Operația șterge întâi obiectele private din toate bucket-urile, apoi profilul și
+toate datele PostgreSQL dependente.
 
 ## Limite de resurse
 
-Aplicația aplică în backend cote per utilizator și globale pentru Gemini,
-OpenAlex și transcriere, limite de concurență, maximum cinci query-uri OpenAlex
-într-o căutare și cote cumulative pentru fișiere. Valorile implicite sunt
-documentate în `.env.example` și trebuie ajustate în funcție de capacitatea și
-bugetul deploymentului. Contoarele sunt păstrate în `data/security_limits.db`;
-toate instanțele care folosesc aceeași cheie API trebuie să folosească aceeași
-bază de limite sau un echivalent centralizat oferit de platforma cloud.
+Aplicația aplică cote per utilizator și globale pentru Gemini, OpenAlex și
+transcriere, plus limite de concurență. În cloud, contoarele și lease-urile sunt
+centralizate în schema privată PostgreSQL `app_private`; în fallback-ul SQLite
+rămân în `data/security_limits.db`. Valorile implicite sunt documentate în
+`.env.example` și trebuie ajustate după bugetul deploymentului.

@@ -213,6 +213,9 @@ def update_manuscript(
 
 
 def _json_list(value: str | None) -> list:
+    if isinstance(value, list):
+        return value
+
     try:
         parsed = json.loads(value or "[]")
     except (TypeError, json.JSONDecodeError):
@@ -257,12 +260,16 @@ def get_manuscript_submission_profile(manuscript_id: int) -> dict:
     })
 
     try:
-        corresponding = json.loads(row["corresponding_author_json"] or "{}")
+        corresponding = row["corresponding_author_json"] or {}
+        if not isinstance(corresponding, dict):
+            corresponding = json.loads(corresponding)
     except (TypeError, json.JSONDecodeError):
         corresponding = {}
 
     try:
-        checklist = json.loads(row["checklist_json"] or "{}")
+        checklist = row["checklist_json"] or {}
+        if not isinstance(checklist, dict):
+            checklist = json.loads(checklist)
     except (TypeError, json.JSONDecodeError):
         checklist = {}
 
@@ -572,6 +579,9 @@ def move_manuscript_section(section_id: int, direction: int):
 
 
 def _json_object(value: str | None) -> dict:
+    if isinstance(value, dict):
+        return value
+
     try:
         parsed = json.loads(value or "{}")
     except (TypeError, json.JSONDecodeError):
@@ -1325,6 +1335,9 @@ def get_manuscript_evidence(manuscript_id: int):
 
 
 def _json_list(value: str | None) -> list:
+    if isinstance(value, list):
+        return value
+
     try:
         parsed = json.loads(value or "[]")
     except (TypeError, json.JSONDecodeError):
@@ -1647,10 +1660,15 @@ def get_manuscript_version(version_id: int) -> dict | None:
 
     result = dict(row)
 
-    try:
-        result["snapshot"] = json.loads(row["snapshot_json"])
-    except json.JSONDecodeError:
-        result["snapshot"] = {}
+    snapshot = row["snapshot_json"]
+
+    if isinstance(snapshot, dict):
+        result["snapshot"] = snapshot
+    else:
+        try:
+            result["snapshot"] = json.loads(snapshot)
+        except (TypeError, json.JSONDecodeError):
+            result["snapshot"] = {}
 
     return result
 
@@ -2208,10 +2226,15 @@ def get_manuscript_ai_messages(manuscript_id: int, limit: int = 20) -> list[dict
     for row in reversed(rows):
         message = dict(row)
 
-        try:
-            message["payload"] = json.loads(row["payload_json"] or "{}")
-        except json.JSONDecodeError:
-            message["payload"] = {}
+        payload = row["payload_json"] or {}
+
+        if isinstance(payload, dict):
+            message["payload"] = payload
+        else:
+            try:
+                message["payload"] = json.loads(payload)
+            except (TypeError, json.JSONDecodeError):
+                message["payload"] = {}
 
         messages.append(message)
 

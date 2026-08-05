@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import sqlite3
 import time
@@ -6,6 +7,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from uuid import uuid4
 
+from utils.runtime_config import postgres_url, uses_postgres
 from utils.user_scope import get_user_scope
 
 
@@ -81,15 +83,65 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
+def _connect_postgres():
+    try:
+        import psycopg
+    except ImportError as exc:
+        raise RuntimeError("The PostgreSQL driver is not installed.") from exc
+
+    dsn = re.sub(
+        r"^postgresql\+psycopg://",
+        "postgresql://",
+        postgres_url(),
+        count=1,
+    )
+
+    if not dsn:
+        raise RuntimeError("The PostgreSQL connection is not configured.")
+
+    return psycopg.connect(
+        dsn,
+        connect_timeout=10,
+        application_name="research-journal-resource-limits",
+    )
+
+
 def _principal() -> str:
     scope = get_user_scope()
-    return scope.storage_key if scope else "local-workspace"
+
+    if scope is None:
+        return "local-workspace"
+
+    if uses_postgres():
+        from db.database import get_current_app_user_id
+
+        return get_current_app_user_id()
+
+    return scope.storage_key
 
 
 def purge_current_principal_usage():
     scope = get_user_scope()
 
     if scope is None:
+        return
+
+    if uses_postgres():
+        principal = _principal()
+        conn = _connect_postgres()
+
+        try:
+            with conn.transaction():
+                conn.execute(
+                    "DELETE FROM app_private.usage_counters WHERE principal = %s",
+                    (principal,),
+                )
+                conn.execute(
+                    "DELETE FROM app_private.resource_leases WHERE principal = %s",
+                    (principal,),
+                )
+        finally:
+            conn.close()
         return
 
     conn = _connect()
@@ -129,6 +181,10 @@ def consume_rate_limit(
 
     if global_per_day is not None:
         policies.append(("*", 86400, global_per_day, "application-wide daily quota"))
+    if uses_postgres():
+        _consume_postgres_rate_limit(resource, policies, now)
+        return
+
     conn = _connect()
 
     try:
@@ -177,6 +233,56 @@ def consume_rate_limit(
         conn.close()
 
 
+def _consume_postgres_rate_limit(resource: str, policies: list, now: int):
+    conn = _connect_postgres()
+
+    try:
+        with conn.transaction():
+            conn.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                (resource,),
+            )
+
+            for principal, window_seconds, limit, label in policies:
+                window_start = now - (now % window_seconds)
+                row = conn.execute(
+                    """
+                    SELECT request_count
+                    FROM app_private.usage_counters
+                    WHERE resource = %s AND principal = %s
+                      AND window_seconds = %s AND window_start = %s
+                    """,
+                    (resource, principal, window_seconds, window_start),
+                ).fetchone()
+                current = int(row[0]) if row else 0
+
+                if current >= limit:
+                    raise ResourceLimitError(
+                        f"{resource} {label} reached. Please wait before trying again."
+                    )
+
+            for principal, window_seconds, _, _ in policies:
+                window_start = now - (now % window_seconds)
+                conn.execute(
+                    """
+                    INSERT INTO app_private.usage_counters (
+                        resource, principal, window_seconds, window_start, request_count
+                    ) VALUES (%s, %s, %s, %s, 1)
+                    ON CONFLICT(resource, principal, window_seconds, window_start)
+                    DO UPDATE SET request_count =
+                        app_private.usage_counters.request_count + 1
+                    """,
+                    (resource, principal, window_seconds, window_start),
+                )
+
+            conn.execute(
+                "DELETE FROM app_private.usage_counters WHERE window_start < %s",
+                (now - 172800,),
+            )
+    finally:
+        conn.close()
+
+
 @contextmanager
 def concurrency_slot(
     resource: str,
@@ -187,6 +293,15 @@ def concurrency_slot(
     """Acquire an application-wide lease that is safe across local processes."""
     if get_user_scope() is None and os.getenv("ENFORCE_UNSCOPED_LIMITS", "0") != "1":
         yield
+        return
+
+    if uses_postgres():
+        with _postgres_concurrency_slot(
+            resource,
+            global_limit=global_limit,
+            lease_seconds=lease_seconds,
+        ):
+            yield
         return
 
     now = int(time.time())
@@ -228,6 +343,64 @@ def concurrency_slot(
         try:
             conn.execute("DELETE FROM resource_leases WHERE lease_id = ?", (lease_id,))
             conn.commit()
+        finally:
+            conn.close()
+
+
+@contextmanager
+def _postgres_concurrency_slot(
+    resource: str,
+    *,
+    global_limit: int,
+    lease_seconds: int,
+):
+    now = int(time.time())
+    lease_id = uuid4()
+    conn = _connect_postgres()
+
+    try:
+        with conn.transaction():
+            conn.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                (resource,),
+            )
+            conn.execute(
+                """
+                DELETE FROM app_private.resource_leases
+                WHERE resource = %s AND expires_at <= %s
+                """,
+                (resource, now),
+            )
+            active = conn.execute(
+                """
+                SELECT COUNT(*) FROM app_private.resource_leases
+                WHERE resource = %s
+                """,
+                (resource,),
+            ).fetchone()[0]
+
+            if int(active) >= global_limit:
+                raise ResourceLimitError(
+                    f"Too many {resource} operations are already running. Try again shortly."
+                )
+
+            conn.execute(
+                """
+                INSERT INTO app_private.resource_leases (
+                    resource, lease_id, principal, expires_at
+                ) VALUES (%s, %s, %s, %s)
+                """,
+                (resource, lease_id, _principal(), now + lease_seconds),
+            )
+
+        yield
+    finally:
+        try:
+            with conn.transaction():
+                conn.execute(
+                    "DELETE FROM app_private.resource_leases WHERE lease_id = %s",
+                    (lease_id,),
+                )
         finally:
             conn.close()
 

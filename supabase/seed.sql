@@ -1,0 +1,2 @@
+-- Development-only seed data belongs here.
+-- Keep production data out of this file.

@@ -78,6 +78,44 @@ def _user_claims() -> dict:
         return {}
 
 
+def current_id_token() -> str:
+    """Return the exposed Auth0 ID token without copying it into app state."""
+    try:
+        token = str(st.user.tokens["id"] or "").strip()
+    except (KeyError, TypeError, AttributeError):
+        token = ""
+
+    if not token:
+        raise RuntimeError(
+            "Tokenul ID Auth0 nu este disponibil. Adaugă `expose_tokens = \"id\"` "
+            "în secțiunea `[auth]`, apoi deloghează-te și autentifică-te din nou."
+        )
+
+    return token
+
+
+def _trusted_database_claims(claims: dict) -> dict:
+    allowed = (
+        "iss",
+        "sub",
+        "role",
+        "email",
+        "name",
+        "nickname",
+        "preferred_username",
+        "picture",
+        "exp",
+        "iat",
+        "aud",
+    )
+    return {
+        key: value
+        for key in allowed
+        if (value := claims.get(key)) is not None
+        and isinstance(value, (str, int, float, bool, list))
+    }
+
+
 def _is_logged_in(claims: dict) -> bool:
     try:
         return bool(st.user.is_logged_in)
@@ -156,7 +194,32 @@ def require_auth() -> dict:
         st.stop()
         return {}
 
-    activate_user_scope(issuer, subject)
+    from utils.runtime_config import uses_postgres
+
+    if uses_postgres() and claims.get("role") != "authenticated":
+        st.error(
+            "Tokenul ID Auth0 nu conține claimul literal "
+            "`role = authenticated`. Verifică Action-ul Post Login din Auth0, "
+            "apoi deloghează-te și autentifică-te din nou."
+        )
+        clear_user_scope()
+        st.stop()
+        return {}
+
+    if uses_postgres():
+        try:
+            current_id_token()
+        except RuntimeError as exc:
+            st.error(str(exc))
+            clear_user_scope()
+            st.stop()
+            return {}
+
+    activate_user_scope(
+        issuer,
+        subject,
+        claims=_trusted_database_claims(claims),
+    )
     return claims
 
 

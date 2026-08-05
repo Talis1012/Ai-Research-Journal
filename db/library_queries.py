@@ -1,4 +1,5 @@
 from db.database import get_connection
+from utils.runtime_config import uses_postgres
 
 
 LIBRARY_ITEM_TYPES = (
@@ -293,6 +294,43 @@ def create_library_item(
 
 
 def _library_item_select() -> str:
+    if uses_postgres():
+        return """
+            SELECT
+                item.*,
+                folder.name AS folder_name,
+                COALESCE((
+                    SELECT STRING_AGG(
+                        tag.name::text,
+                        ', ' ORDER BY LOWER(tag.name::text)
+                    )
+                    FROM library_tags tag
+                    JOIN library_item_tags item_tag
+                      ON item_tag.tag_id = tag.id
+                    WHERE item_tag.item_id = item.id
+                ), '') AS tags,
+                COALESCE((
+                    SELECT STRING_AGG(
+                        item_project.project_id::text,
+                        ',' ORDER BY item_project.project_id
+                    )
+                    FROM library_item_projects item_project
+                    WHERE item_project.item_id = item.id
+                ), '') AS project_ids,
+                COALESCE((
+                    SELECT STRING_AGG(
+                        project.name,
+                        ', ' ORDER BY LOWER(project.name)
+                    )
+                    FROM projects project
+                    JOIN library_item_projects item_project
+                      ON item_project.project_id = project.id
+                    WHERE item_project.item_id = item.id
+                ), '') AS project_names
+            FROM library_items item
+            LEFT JOIN library_folders folder ON folder.id = item.folder_id
+        """
+
     return """
         SELECT
             item.*,

@@ -5,6 +5,14 @@ from pathlib import Path
 from uuid import uuid4
 
 from services.resource_limits import enforce_storage_quota, env_int
+from services.supabase_storage import (
+    delete_object,
+    download_bytes,
+    enforce_user_storage_quota,
+    is_storage_reference,
+    upload_bytes,
+)
+from utils.runtime_config import uses_supabase_storage
 from utils.user_scope import scoped_path
 
 
@@ -92,37 +100,63 @@ def save_library_upload(uploaded_file) -> dict:
     if file_size > MAX_LIBRARY_FILE_SIZE:
         raise ValueError("The file is larger than the 25 MB upload limit.")
 
-    storage_path = get_library_storage_path()
-    enforce_storage_quota(
-        storage_path,
-        file_size,
-        quota_bytes=env_int(
-            "MAX_LIBRARY_STORAGE_BYTES",
-            500 * 1024 * 1024,
-            minimum=MAX_LIBRARY_FILE_SIZE,
-        ),
-        label="library",
-        max_files=env_int("MAX_LIBRARY_STORED_FILES", 2000, maximum=10000),
-    )
     stored_filename = f"{uuid4().hex}{_safe_extension(original_filename)}"
-    file_path = storage_path / stored_filename
-    file_path.write_bytes(file_bytes)
-
-    try:
-        file_path.chmod(0o600)
-    except OSError:
-        pass
     mime_type = (
         getattr(uploaded_file, "type", None)
         or mimetypes.guess_type(original_filename)[0]
         or "application/octet-stream"
     )
 
+    if uses_supabase_storage():
+        enforce_user_storage_quota(
+            "library",
+            file_size,
+            quota_bytes=env_int(
+                "MAX_LIBRARY_STORAGE_BYTES",
+                500 * 1024 * 1024,
+                minimum=MAX_LIBRARY_FILE_SIZE,
+            ),
+            label="library",
+            max_files=env_int(
+                "MAX_LIBRARY_STORED_FILES",
+                2000,
+                maximum=10000,
+            ),
+        )
+        file_path = upload_bytes(
+            "library",
+            stored_filename,
+            file_bytes,
+            content_type=mime_type,
+        )
+    else:
+        storage_path = get_library_storage_path()
+        enforce_storage_quota(
+            storage_path,
+            file_size,
+            quota_bytes=env_int(
+                "MAX_LIBRARY_STORAGE_BYTES",
+                500 * 1024 * 1024,
+                minimum=MAX_LIBRARY_FILE_SIZE,
+            ),
+            label="library",
+            max_files=env_int("MAX_LIBRARY_STORED_FILES", 2000, maximum=10000),
+        )
+        local_path = storage_path / stored_filename
+        local_path.write_bytes(file_bytes)
+
+        try:
+            local_path.chmod(0o600)
+        except OSError:
+            pass
+
+        file_path = str(local_path)
+
     return {
         "title": title_from_filename(original_filename),
         "item_type": infer_library_item_type(original_filename),
         "original_filename": original_filename,
-        "file_path": str(file_path),
+        "file_path": file_path,
         "mime_type": mime_type,
         "file_size": file_size,
     }
@@ -152,6 +186,9 @@ def validate_library_upload_batch(uploads) -> list:
 
 
 def read_library_file(file_path: str) -> bytes:
+    if is_storage_reference(file_path):
+        return download_bytes(file_path, bucket="library")
+
     safe_path = _path_inside_library(file_path)
 
     if not safe_path.is_file():
@@ -162,6 +199,10 @@ def read_library_file(file_path: str) -> bytes:
 
 def delete_library_file(file_path: str | None):
     if not file_path:
+        return
+
+    if is_storage_reference(file_path):
+        delete_object(file_path, bucket="library")
         return
 
     safe_path = _path_inside_library(file_path)

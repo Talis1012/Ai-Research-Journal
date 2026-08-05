@@ -59,6 +59,7 @@ from services.summary_service import (
 )
 from services.transcription_service import (
     delete_audio_file,
+    read_audio_file,
     save_audio_file,
     transcribe_audio,
 )
@@ -709,8 +710,10 @@ def render_notes_tab(selected_chat, messages, audio_records):
             for record in reversed(audio_records[-3:]):
                 st.caption(compact_date(record["created_at"]))
 
-                if os.path.exists(record["file_path"]):
-                    st.audio(record["file_path"])
+                try:
+                    st.audio(read_audio_file(record["file_path"]), format="audio/wav")
+                except (FileNotFoundError, OSError, ValueError):
+                    st.caption("Înregistrarea audio nu mai este disponibilă.")
 
 
 def render_ai_chat_panel(selected_project, selected_chat, messages, ai_messages):
