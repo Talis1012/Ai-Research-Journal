@@ -158,7 +158,6 @@ class _PostgresCursor:
         self._lastrowid = None
 
     def execute(self, statement, params=None):
-        self._connection._ensure_request_context()
         translated = _translate_postgres_sql(str(statement))
         table = _insert_table(translated)
 
@@ -169,7 +168,11 @@ class _PostgresCursor:
         ):
             translated = translated.rstrip().rstrip(";") + " RETURNING id"
 
-        self._cursor.execute(translated, params or ())
+        self._connection._execute_in_request_context(
+            self._cursor,
+            translated,
+            params if params is not None else (),
+        )
         self._lastrowid = None
 
         if table in _IDENTITY_TABLES:
@@ -181,8 +184,8 @@ class _PostgresCursor:
         return self
 
     def executemany(self, statement, params_seq):
-        self._connection._ensure_request_context()
-        self._cursor.executemany(
+        self._connection._executemany_in_request_context(
+            self._cursor,
             _translate_postgres_sql(str(statement)),
             params_seq,
         )
@@ -214,10 +217,8 @@ class _PostgresConnection:
         self._context_ready = False
         self._closed = False
 
-    def _ensure_request_context(self):
-        if self._context_ready:
-            return
-
+    @staticmethod
+    def _request_claims_json():
         scope = get_user_scope()
 
         if scope is None:
@@ -229,21 +230,53 @@ class _PostgresConnection:
         claims["iss"] = scope.issuer
         claims["sub"] = scope.subject
         claims.setdefault("role", "authenticated")
+        return json.dumps(claims, separators=(",", ":"))
 
-        with self._raw.cursor() as cursor:
-            cursor.execute(
-                "select set_config('request.jwt.claims', %s, true)",
-                (json.dumps(claims, separators=(",", ":")),),
-            )
-            cursor.execute("set local role authenticated")
-            user_row = cursor.execute(
-                "select app_private.current_app_user_id() as id"
-            ).fetchone()
+    def _execute_in_request_context(self, cursor, statement, params):
+        if self._context_ready:
+            return cursor.execute(statement, params)
 
-            if not user_row or user_row["id"] is None:
-                cursor.execute("select public.ensure_current_app_user() as id")
+        claims_json = self._request_claims_json()
+
+        with self._raw.cursor() as context_cursor:
+            # Pipeline the RLS setup and the application query so a database
+            # operation needs one network round trip instead of several. Using
+            # set_config for `role` is equivalent to SET LOCAL ROLE and remains
+            # scoped to this transaction.
+            with self._raw.pipeline():
+                context_cursor.execute(
+                    """
+                    select
+                        set_config('request.jwt.claims', %s, true),
+                        set_config('role', 'authenticated', true)
+                    """,
+                    (claims_json,),
+                )
+                result = cursor.execute(statement, params)
 
         self._context_ready = True
+        return result
+
+    def _executemany_in_request_context(self, cursor, statement, params_seq):
+        if self._context_ready:
+            return cursor.executemany(statement, params_seq)
+
+        claims_json = self._request_claims_json()
+
+        with self._raw.cursor() as context_cursor:
+            with self._raw.pipeline():
+                context_cursor.execute(
+                    """
+                    select
+                        set_config('request.jwt.claims', %s, true),
+                        set_config('role', 'authenticated', true)
+                    """,
+                    (claims_json,),
+                )
+                result = cursor.executemany(statement, params_seq)
+
+        self._context_ready = True
+        return result
 
     def cursor(self):
         return _PostgresCursor(self)
@@ -286,10 +319,17 @@ class _PostgresConnection:
 
 @lru_cache(maxsize=2)
 def _postgres_pool(dsn: str):
+    max_size = env_int("MAX_POSTGRES_POOL_SIZE", 8, maximum=32)
+    min_size = env_int(
+        "MIN_POSTGRES_POOL_SIZE",
+        1,
+        minimum=0,
+        maximum=max_size,
+    )
     pool = ConnectionPool(
         conninfo=dsn,
-        min_size=0,
-        max_size=env_int("MAX_POSTGRES_POOL_SIZE", 8, maximum=32),
+        min_size=min_size,
+        max_size=max_size,
         timeout=10,
         max_lifetime=1800,
         max_idle=300,
@@ -393,18 +433,27 @@ def get_current_app_user_id() -> str:
 def init_db_once(session_state) -> bool:
     """Initialize the active user's database once per browser session.
 
-    The marker is keyed by the fully scoped database path, so switching users
-    cannot reuse another user's initialization state. If the workspace was
-    deleted during the session, the missing file forces initialization again.
+    The marker is keyed by the authenticated identity for PostgreSQL and by the
+    fully scoped path for SQLite, so switching users cannot reuse another
+    user's initialization state. A missing SQLite workspace is initialized
+    again; PostgreSQL workspace deletion ends the authenticated session.
     """
     if uses_postgres():
-        user_id = get_current_app_user_id()
+        scope = get_user_scope()
+
+        if scope is None:
+            raise RuntimeError("An authenticated user scope is required.")
+
         state_key = "_initialized_postgres_users"
         initialized_users = set(session_state.get(state_key, ()))
-        was_initialized = user_id in initialized_users
-        initialized_users.add(user_id)
+
+        if scope.storage_key in initialized_users:
+            return False
+
+        get_current_app_user_id()
+        initialized_users.add(scope.storage_key)
         session_state[state_key] = tuple(sorted(initialized_users))
-        return not was_initialized
+        return True
 
     db_path = get_db_path()
     state_key = "_initialized_database_paths"
