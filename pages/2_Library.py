@@ -38,6 +38,7 @@ from services.library_service import (
 )
 from utils.auth import authenticated_callback, require_auth
 from utils.content_safety import safe_external_url, sanitize_untrusted_markdown
+from utils.query_cache import cached_read
 from utils.ui import (
     chat_message,
     compact_date,
@@ -1069,14 +1070,15 @@ def render_library_list(folders, projects, paths):
         query_filters["item_type"] = filters.get("item_type", selected_type)
 
     page_size = 8
-    total_items = get_library_item_count(**query_filters)
+    total_items = cached_read(get_library_item_count, **query_filters)
     total_pages = max(1, math.ceil(total_items / page_size))
     page_number = min(
         max(int(st.session_state.get("library_page_number", 1)), 1),
         total_pages,
     )
     st.session_state["library_page_number"] = page_number
-    page_items = get_library_items(
+    page_items = cached_read(
+        get_library_items,
         **query_filters,
         sort=selected_sort,
         limit=page_size,
@@ -1191,7 +1193,7 @@ def render_library_download(item):
 def render_details_panel(folders, projects, paths):
     render_html('<div class="library-details-scope"></div>')
     item_id = st.session_state.get("library_selected_item_id")
-    item = get_library_item(item_id) if item_id else None
+    item = cached_read(get_library_item, item_id) if item_id else None
 
     if not item:
         render_html(
@@ -1434,7 +1436,11 @@ def _clear_discovery_state_for_project(
 
 
 def _load_saved_discovery_for_project(project_id: int, source_mode: str):
-    snapshot = get_project_discovery_results(project_id, source_mode)
+    snapshot = cached_read(
+        get_project_discovery_results,
+        project_id,
+        source_mode,
+    )
 
     if snapshot:
         _apply_discovery_snapshot(snapshot)
@@ -1452,9 +1458,9 @@ def _hydrate_discovery_state_from_database():
         st.session_state.get("discover_mode", "Manual Search"),
     )
     snapshot = (
-        get_project_discovery_results(project_id, source_mode)
+        cached_read(get_project_discovery_results, project_id, source_mode)
         if project_id
-        else get_latest_project_discovery_results()
+        else cached_read(get_latest_project_discovery_results)
     )
 
     if snapshot:
@@ -1749,7 +1755,7 @@ def _render_discovery_search_controls(projects):
                 st.error("From year cannot be later than To year.")
             else:
                 project = projects_by_id.get(project_id)
-                ideas = get_project_ideas(project_id) if project_id else []
+                ideas = cached_read(get_project_ideas, project_id) if project_id else []
                 profile = _manual_discovery_profile(query, project)
 
                 with st.spinner("Searching OpenAlex and calculating hybrid scores..."):
@@ -1875,8 +1881,8 @@ def _render_discovery_search_controls(projects):
                 st.error("From year cannot be later than To year.")
             else:
                 project = projects_by_id[project_id]
-                messages = get_project_messages(project_id)
-                ideas = get_project_ideas(project_id)
+                messages = cached_read(get_project_messages, project_id)
+                ideas = cached_read(get_project_ideas, project_id)
 
                 with st.spinner("AI is building the search strategy and ranking papers..."):
                     try:
@@ -1940,7 +1946,7 @@ def _render_discovery_profile_editor(projects):
             queries = [line.strip() for line in queries_text.splitlines() if line.strip()]
             options = st.session_state.get("discover_search_options", {})
             project_id = st.session_state.get("discover_project_id")
-            ideas = get_project_ideas(project_id) if project_id else []
+            ideas = cached_read(get_project_ideas, project_id) if project_id else []
 
             with st.spinner("Searching OpenAlex and recalculating scores..."):
                 try:
@@ -2224,7 +2230,7 @@ def _render_discovery_results(folders, projects, paths):
         )
         return
 
-    external_keys = get_library_external_keys()
+    external_keys = cached_read(get_library_external_keys)
     st.caption(f"{len(results)} unique papers · ranked with calculated and AI scores")
 
     for work in results:
@@ -2238,7 +2244,7 @@ def _render_discovery_results(folders, projects, paths):
         queries = st.session_state.get("discover_queries", [])
         project_id = st.session_state.get("discover_project_id")
         options = st.session_state.get("discover_search_options", {})
-        ideas = get_project_ideas(project_id) if project_id else []
+        ideas = cached_read(get_project_ideas, project_id) if project_id else []
         _run_discovery_search(
             queries=queries,
             profile=profile,
@@ -2310,8 +2316,8 @@ def _submit_discovery_question(question: str, projects):
     history = st.session_state.setdefault("discover_chat_history", [])
     project_id = st.session_state.get("discover_project_id")
     project = _project_by_id(projects, project_id)
-    project_messages = get_project_messages(project_id) if project_id else []
-    project_ideas = get_project_ideas(project_id) if project_id else []
+    project_messages = cached_read(get_project_messages, project_id) if project_id else []
+    project_ideas = cached_read(get_project_ideas, project_id) if project_id else []
     history.append({
         "role": "user",
         "content": normalized_question,
@@ -2459,8 +2465,8 @@ render_page_css()
 st.session_state.setdefault("library_collection", "all")
 st.session_state.setdefault("library_page_number", 1)
 
-folders = get_library_folders()
-projects = get_projects()
+folders = cached_read(get_library_folders)
+projects = cached_read(get_projects)
 paths = folder_paths(folders)
 
 top_brand_col, top_context_col, top_space_col, top_user_col = st.columns(
@@ -2518,7 +2524,7 @@ with page_col:
 
     if my_library_tab.open:
         with my_library_tab:
-            stats = get_library_stats()
+            stats = cached_read(get_library_stats)
             folder_col, list_col, details_col = st.columns(
                 [1.05, 2.75, 1.65],
                 gap="small",

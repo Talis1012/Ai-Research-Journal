@@ -1,6 +1,8 @@
 import os
+import threading
 
 import requests
+from requests.adapters import HTTPAdapter
 from dotenv import load_dotenv
 
 from db.library_queries import normalize_doi, normalize_openalex_id
@@ -20,6 +22,20 @@ OPENALEX_SORT_OPTIONS = {
     "citations": "cited_by_count:desc",
     "newest": "publication_date:desc",
 }
+_http_state = threading.local()
+
+
+def _http_session() -> requests.Session:
+    session = getattr(_http_state, "session", None)
+
+    if session is None:
+        session = requests.Session()
+        adapter = HTTPAdapter(pool_connections=4, pool_maxsize=8, max_retries=0)
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+        _http_state.session = session
+
+    return session
 
 
 def reconstruct_abstract(abstract_inverted_index):
@@ -231,7 +247,7 @@ def search_works(
         lease_seconds=40,
     ):
         try:
-            response = requests.get(
+            response = _http_session().get(
                 f"{OPENALEX_BASE_URL}/works",
                 params=params,
                 timeout=15,

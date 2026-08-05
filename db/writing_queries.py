@@ -4,7 +4,7 @@ import unicodedata
 from datetime import datetime
 from pathlib import Path
 
-from db.database import get_connection
+from db.database import fetch_many, get_connection
 from services.manuscript_asset_service import (
     delete_manuscript_asset_directory,
     delete_manuscript_asset_file,
@@ -224,13 +224,7 @@ def _json_list(value: str | None) -> list:
     return parsed if isinstance(parsed, list) else []
 
 
-def get_manuscript_submission_profile(manuscript_id: int) -> dict:
-    conn = get_connection()
-    row = conn.execute(
-        "SELECT * FROM manuscript_submission_profiles WHERE manuscript_id = ?",
-        (manuscript_id,),
-    ).fetchone()
-    conn.close()
+def _submission_profile_from_row(manuscript_id: int, row) -> dict:
     profile = {
         "manuscript_id": manuscript_id,
         "target_journal": "",
@@ -276,6 +270,16 @@ def get_manuscript_submission_profile(manuscript_id: int) -> dict:
     profile["corresponding_author"] = corresponding if isinstance(corresponding, dict) else {}
     profile["checklist"].update(checklist if isinstance(checklist, dict) else {})
     return profile
+
+
+def get_manuscript_submission_profile(manuscript_id: int) -> dict:
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM manuscript_submission_profiles WHERE manuscript_id = ?",
+        (manuscript_id,),
+    ).fetchone()
+    conn.close()
+    return _submission_profile_from_row(manuscript_id, row)
 
 
 def update_manuscript_submission_profile(
@@ -614,6 +618,10 @@ def get_manuscript_assets(
         (manuscript_id,),
     ).fetchall()
     conn.close()
+    return _manuscript_assets_from_rows(rows, section_id=section_id)
+
+
+def _manuscript_assets_from_rows(rows, *, section_id: int | None = None):
     counters = {asset_type: 0 for asset_type in MANUSCRIPT_ASSET_TYPES}
     assets = []
 
@@ -965,6 +973,73 @@ def get_manuscript_sources(manuscript_id: int):
     return rows
 
 
+def get_manuscript_workspace(manuscript_id: int):
+    manuscript, sections, sources, asset_rows, profile_row = fetch_many(
+        [
+            (
+                """
+                SELECT manuscript.*, project.name AS project_name,
+                       project.domain AS project_domain,
+                       project.description AS project_description
+                FROM manuscripts manuscript
+                JOIN projects project ON project.id = manuscript.project_id
+                WHERE manuscript.id = ?
+                """,
+                (manuscript_id,),
+                "one",
+            ),
+            (
+                """
+                SELECT * FROM manuscript_sections
+                WHERE manuscript_id = ?
+                ORDER BY sort_order ASC, id ASC
+                """,
+                (manuscript_id,),
+                "all",
+            ),
+            (
+                """
+                SELECT source.manuscript_id, source.library_item_id,
+                       source.citation_key, source.notes AS source_notes,
+                       source.created_at AS attached_at, item.*
+                FROM manuscript_sources source
+                JOIN library_items item ON item.id = source.library_item_id
+                WHERE source.manuscript_id = ?
+                ORDER BY item.title COLLATE NOCASE ASC
+                """,
+                (manuscript_id,),
+                "all",
+            ),
+            (
+                """
+                SELECT asset.*, section.sort_order AS section_sort_order
+                FROM manuscript_assets asset
+                JOIN manuscript_sections section ON section.id = asset.section_id
+                WHERE asset.manuscript_id = ?
+                ORDER BY section.sort_order ASC, asset.sort_order ASC, asset.id ASC
+                """,
+                (manuscript_id,),
+                "all",
+            ),
+            (
+                "SELECT * FROM manuscript_submission_profiles WHERE manuscript_id = ?",
+                (manuscript_id,),
+                "one",
+            ),
+        ]
+    )
+    return {
+        "manuscript": manuscript,
+        "sections": sections,
+        "sources": sources,
+        "assets": _manuscript_assets_from_rows(asset_rows),
+        "submission_profile": _submission_profile_from_row(
+            manuscript_id,
+            profile_row,
+        ),
+    }
+
+
 def attach_manuscript_source(manuscript_id: int, library_item_id: int) -> str:
     conn = get_connection()
     item = conn.execute(
@@ -1254,37 +1329,41 @@ def insert_section_citation(section_id: int, library_item_id: int):
 
 
 def get_project_evidence_candidates(project_id: int) -> list[dict]:
-    conn = get_connection()
-    experiments = conn.execute(
-        """
-        SELECT id, title, objective
-        FROM chats
-        WHERE project_id = ?
-        ORDER BY created_at DESC, id DESC
-        """,
-        (project_id,),
-    ).fetchall()
-    summaries = conn.execute(
-        """
-        SELECT summary.id, summary.scope, summary.summary_style, summary.content,
-               chat.title AS chat_title
-        FROM summaries summary
-        LEFT JOIN chats chat ON chat.id = summary.chat_id
-        WHERE summary.project_id = ?
-        ORDER BY summary.created_at DESC, summary.id DESC
-        """,
-        (project_id,),
-    ).fetchall()
-    ideas = conn.execute(
-        """
-        SELECT id, title, description, evidence, importance
-        FROM project_ideas
-        WHERE project_id = ?
-        ORDER BY created_at DESC, id DESC
-        """,
-        (project_id,),
-    ).fetchall()
-    conn.close()
+    experiments, summaries, ideas = fetch_many(
+        [
+            (
+                """
+                SELECT id, title, objective FROM chats
+                WHERE project_id = ?
+                ORDER BY created_at DESC, id DESC
+                """,
+                (project_id,),
+                "all",
+            ),
+            (
+                """
+                SELECT summary.id, summary.scope, summary.summary_style,
+                       summary.content, chat.title AS chat_title
+                FROM summaries summary
+                LEFT JOIN chats chat ON chat.id = summary.chat_id
+                WHERE summary.project_id = ?
+                ORDER BY summary.created_at DESC, summary.id DESC
+                """,
+                (project_id,),
+                "all",
+            ),
+            (
+                """
+                SELECT id, title, description, evidence, importance
+                FROM project_ideas
+                WHERE project_id = ?
+                ORDER BY created_at DESC, id DESC
+                """,
+                (project_id,),
+                "all",
+            ),
+        ]
+    )
     candidates = []
 
     for row in experiments:
@@ -1623,7 +1702,14 @@ def create_manuscript_version(
     return version_id
 
 
-def get_manuscript_versions(manuscript_id: int):
+def get_manuscript_versions(
+    manuscript_id: int,
+    *,
+    limit: int = 20,
+    offset: int = 0,
+):
+    limit = max(1, min(int(limit), 100))
+    offset = max(0, int(offset))
     conn = get_connection()
     rows = conn.execute(
         """
@@ -1635,16 +1721,78 @@ def get_manuscript_versions(manuscript_id: int):
             version.note,
             version.word_count,
             version.created_at,
+            version.snapshot_json,
             (SELECT COUNT(*) FROM manuscript_version_comments comment
              WHERE comment.version_id = version.id) AS comment_count
         FROM manuscript_versions version
         WHERE version.manuscript_id = ?
         ORDER BY version.created_at DESC, version.id DESC
+        LIMIT ? OFFSET ?
         """,
-        (manuscript_id,),
+        (manuscript_id, limit, offset),
     ).fetchall()
     conn.close()
-    return rows
+    return _normalize_manuscript_versions(rows)
+
+
+def _normalize_manuscript_versions(rows):
+    results = []
+
+    for row in rows:
+        result = dict(row)
+        snapshot = result.pop("snapshot_json", None)
+
+        if isinstance(snapshot, dict):
+            result["snapshot"] = snapshot
+        else:
+            try:
+                result["snapshot"] = json.loads(snapshot)
+            except (TypeError, json.JSONDecodeError):
+                result["snapshot"] = {}
+
+        results.append(result)
+
+    return results
+
+
+def get_manuscript_versions_page(
+    manuscript_id: int,
+    *,
+    page: int = 1,
+    page_size: int = 20,
+) -> dict:
+    page = max(1, int(page))
+    page_size = max(5, min(int(page_size), 50))
+    count_row, rows = fetch_many(
+        [
+            (
+                "SELECT COUNT(*) AS count FROM manuscript_versions WHERE manuscript_id = ?",
+                (manuscript_id,),
+                "one",
+            ),
+            (
+                """
+                SELECT version.id, version.manuscript_id, version.label,
+                       version.trigger_type, version.note, version.word_count,
+                       version.created_at, version.snapshot_json,
+                       (SELECT COUNT(*) FROM manuscript_version_comments comment
+                        WHERE comment.version_id = version.id) AS comment_count
+                FROM manuscript_versions version
+                WHERE version.manuscript_id = ?
+                ORDER BY version.created_at DESC, version.id DESC
+                LIMIT ? OFFSET ?
+                """,
+                (manuscript_id, page_size, (page - 1) * page_size),
+                "all",
+            ),
+        ]
+    )
+    return {
+        "count": int(count_row["count"] if count_row else 0),
+        "page": page,
+        "page_size": page_size,
+        "versions": _normalize_manuscript_versions(rows),
+    }
 
 
 def get_manuscript_version(version_id: int) -> dict | None:
@@ -1741,6 +1889,33 @@ def get_manuscript_version_comments(version_id: int):
     ).fetchall()
     conn.close()
     return rows
+
+
+def get_manuscript_version_comments_for_versions(version_ids) -> dict:
+    normalized_ids = tuple(
+        dict.fromkeys(int(value) for value in version_ids if int(value) > 0)
+    )
+
+    if not normalized_ids:
+        return {}
+
+    placeholders = ", ".join("?" for _ in normalized_ids)
+    conn = get_connection()
+    rows = conn.execute(
+        f"""
+        SELECT * FROM manuscript_version_comments
+        WHERE version_id IN ({placeholders})
+        ORDER BY version_id, created_at ASC, id ASC
+        """,
+        normalized_ids,
+    ).fetchall()
+    conn.close()
+    comments_by_version = {}
+
+    for row in rows:
+        comments_by_version.setdefault(row["version_id"], []).append(row)
+
+    return comments_by_version
 
 
 def _apply_snapshot(conn, manuscript_id: int, snapshot: dict, *, title_override=None):

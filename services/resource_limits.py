@@ -1,9 +1,11 @@
+import atexit
 import os
 import re
 import shutil
 import sqlite3
 import time
 from contextlib import contextmanager
+from functools import lru_cache
 from pathlib import Path
 from uuid import uuid4
 
@@ -83,12 +85,32 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
-def _connect_postgres():
+@lru_cache(maxsize=2)
+def _limit_postgres_pool(dsn: str):
     try:
-        import psycopg
+        from psycopg_pool import ConnectionPool
     except ImportError as exc:
         raise RuntimeError("The PostgreSQL driver is not installed.") from exc
 
+    pool = ConnectionPool(
+        conninfo=dsn,
+        min_size=0,
+        max_size=env_int("MAX_RESOURCE_LIMIT_POOL_SIZE", 4, maximum=16),
+        timeout=10,
+        max_lifetime=1800,
+        max_idle=300,
+        kwargs={
+            "connect_timeout": 10,
+            "application_name": "research-journal-resource-limits",
+        },
+        open=True,
+    )
+    atexit.register(pool.close)
+    return pool
+
+
+@contextmanager
+def _connect_postgres():
     dsn = re.sub(
         r"^postgresql\+psycopg://",
         "postgresql://",
@@ -99,11 +121,8 @@ def _connect_postgres():
     if not dsn:
         raise RuntimeError("The PostgreSQL connection is not configured.")
 
-    return psycopg.connect(
-        dsn,
-        connect_timeout=10,
-        application_name="research-journal-resource-limits",
-    )
+    with _limit_postgres_pool(dsn).connection() as conn:
+        yield conn
 
 
 def _principal() -> str:
@@ -114,8 +133,9 @@ def _principal() -> str:
 
     if uses_postgres():
         from db.database import get_current_app_user_id
+        from utils.query_cache import cached_identity_read
 
-        return get_current_app_user_id()
+        return cached_identity_read(get_current_app_user_id)
 
     return scope.storage_key
 
@@ -128,9 +148,7 @@ def purge_current_principal_usage():
 
     if uses_postgres():
         principal = _principal()
-        conn = _connect_postgres()
-
-        try:
+        with _connect_postgres() as conn:
             with conn.transaction():
                 conn.execute(
                     "DELETE FROM app_private.usage_counters WHERE principal = %s",
@@ -140,8 +158,6 @@ def purge_current_principal_usage():
                     "DELETE FROM app_private.resource_leases WHERE principal = %s",
                     (principal,),
                 )
-        finally:
-            conn.close()
         return
 
     conn = _connect()
@@ -173,9 +189,10 @@ def consume_rate_limit(
         return
 
     now = int(time.time())
+    principal = _principal()
     policies = [
-        (_principal(), 3600, per_user_hour, "hourly user quota"),
-        (_principal(), 86400, per_user_day, "daily user quota"),
+        (principal, 3600, per_user_hour, "hourly user quota"),
+        (principal, 86400, per_user_day, "daily user quota"),
         ("*", 60, global_per_minute, "application-wide minute quota"),
     ]
 
@@ -234,9 +251,7 @@ def consume_rate_limit(
 
 
 def _consume_postgres_rate_limit(resource: str, policies: list, now: int):
-    conn = _connect_postgres()
-
-    try:
+    with _connect_postgres() as conn:
         with conn.transaction():
             conn.execute(
                 "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
@@ -279,8 +294,6 @@ def _consume_postgres_rate_limit(resource: str, policies: list, now: int):
                 "DELETE FROM app_private.usage_counters WHERE window_start < %s",
                 (now - 172800,),
             )
-    finally:
-        conn.close()
 
 
 @contextmanager
@@ -356,9 +369,7 @@ def _postgres_concurrency_slot(
 ):
     now = int(time.time())
     lease_id = uuid4()
-    conn = _connect_postgres()
-
-    try:
+    with _connect_postgres() as conn:
         with conn.transaction():
             conn.execute(
                 "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
@@ -392,17 +403,14 @@ def _postgres_concurrency_slot(
                 """,
                 (resource, lease_id, _principal(), now + lease_seconds),
             )
-
-        yield
-    finally:
         try:
+            yield
+        finally:
             with conn.transaction():
                 conn.execute(
                     "DELETE FROM app_private.resource_leases WHERE lease_id = %s",
                     (lease_id,),
                 )
-        finally:
-            conn.close()
 
 
 def directory_usage(root: str | Path) -> tuple[int, int]:

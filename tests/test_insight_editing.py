@@ -10,6 +10,7 @@ from db.queries import (
     create_project,
     get_chat_summary,
     get_project_ideas,
+    get_project_workspace,
     get_project_summary,
     save_project_ideas,
     save_summary,
@@ -129,6 +130,13 @@ class InsightEditingTestCase(unittest.TestCase):
         self.assertEqual(edited["evidence"], "Edited evidence.")
         self.assertEqual(edited["importance"], "high")
         self.assertEqual(untouched["description"], "Unchanged idea.")
+
+    def test_project_workspace_batches_experiments_messages_and_ideas(self):
+        chats, messages, ideas = get_project_workspace(self.project_id)
+
+        self.assertEqual([row["id"] for row in chats], [self.chat_id])
+        self.assertEqual(messages, [])
+        self.assertEqual(ideas, [])
 
 
 if __name__ == "__main__":

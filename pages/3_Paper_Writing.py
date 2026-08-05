@@ -1,5 +1,6 @@
 import difflib
 import hashlib
+import math
 import re
 from datetime import datetime
 
@@ -28,18 +29,13 @@ from db.writing_queries import (
     detach_manuscript_evidence,
     detach_manuscript_source,
     duplicate_manuscript_version,
-    get_manuscript,
-    get_manuscript_assets,
     get_manuscript_ai_messages,
     get_manuscript_ai_context,
     get_manuscript_evidence,
-    get_manuscript_section,
-    get_manuscript_sections,
-    get_manuscript_sources,
-    get_manuscript_submission_profile,
     get_manuscript_version,
-    get_manuscript_version_comments,
-    get_manuscript_versions,
+    get_manuscript_version_comments_for_versions,
+    get_manuscript_versions_page,
+    get_manuscript_workspace,
     get_manuscripts,
     get_project_evidence_candidates,
     get_project_library_sources,
@@ -70,7 +66,7 @@ from services.manuscript_export_service import (
 )
 from services.manuscript_asset_service import (
     delete_manuscript_asset_file,
-    read_manuscript_asset_file,
+    manuscript_asset_preview_source,
     save_figure_upload,
 )
 from services.writing_service import WRITING_MODES, generate_writing_suggestion
@@ -83,6 +79,7 @@ from services.manuscript_review_service import (
 from utils.auth import authenticated_callback, require_auth
 from utils.content_safety import safe_external_url
 from utils.markdown_toolbar import render_markdown_toolbar
+from utils.query_cache import cached_read
 from utils.ui import (
     compact_date,
     header_icons,
@@ -385,7 +382,7 @@ def _evidence_context_key(row) -> str:
 
 
 def _resolve_ai_context(manuscript_id, section, sections, sources, evidence):
-    settings = get_manuscript_ai_context(manuscript_id)
+    settings = cached_read(get_manuscript_ai_context, manuscript_id)
     mode = settings["context_mode"]
 
     if mode == "Whole manuscript":
@@ -846,11 +843,11 @@ def _render_readonly_asset(asset):
     if asset["asset_type"] == "figure":
         try:
             st.image(
-                read_manuscript_asset_file(asset["storage_path"]),
+                manuscript_asset_preview_source(asset["storage_path"]),
                 caption=caption,
                 width="stretch",
             )
-        except (FileNotFoundError, ValueError, OSError):
+        except (FileNotFoundError, ValueError, OSError, RuntimeError):
             st.warning(f"{asset['label']}: stored image is unavailable.")
         return
 
@@ -1296,7 +1293,7 @@ def _writing_quick_prompts(mode: str) -> list[tuple[str, str]]:
 
 
 def _render_ai_context_selector(manuscript, section, sections, sources, evidence):
-    settings = get_manuscript_ai_context(manuscript["id"])
+    settings = cached_read(get_manuscript_ai_context, manuscript["id"])
     mode_key = f"writing_context_mode_{manuscript['id']}"
     section_key = f"writing_context_sections_{manuscript['id']}"
     source_key = f"writing_context_sources_{manuscript['id']}"
@@ -1421,7 +1418,11 @@ def _render_ai_assistant(manuscript, section, sections, sources, evidence):
             if st.button(label, key=f"writing_prompt_{mode}_{label}", width="stretch"):
                 st.session_state[instruction_key] = prompt
 
-    messages = get_manuscript_ai_messages(manuscript["id"], limit=8)
+    messages = cached_read(
+        get_manuscript_ai_messages,
+        manuscript["id"],
+        limit=8,
+    )
 
     for message in messages[-4:]:
         with st.chat_message("assistant" if message["role"] == "assistant" else "user"):
@@ -1938,17 +1939,18 @@ def _render_publication_panel(manuscript, sections, sources, assets, profile, ch
         )
 
 
-def _render_manuscript_tab(manuscript):
-    sections = get_manuscript_sections(manuscript["id"])
-    sources = get_manuscript_sources(manuscript["id"])
-    assets = get_manuscript_assets(manuscript["id"])
-    evidence = get_manuscript_evidence(manuscript["id"])
+def _render_manuscript_tab(manuscript, sections, sources, assets, profile):
+    evidence = cached_read(get_manuscript_evidence, manuscript["id"])
     section_ids = [section["id"] for section in sections]
 
     if st.session_state.get("writing_section_id") not in section_ids:
         st.session_state["writing_section_id"] = section_ids[0] if section_ids else None
 
-    section = get_manuscript_section(st.session_state.get("writing_section_id")) if section_ids else None
+    selected_section_id = st.session_state.get("writing_section_id")
+    section = next(
+        (row for row in sections if row["id"] == selected_section_id),
+        None,
+    )
     outline_col, editor_col, assistant_col = st.columns(
         [1.05, 2.8, 1.55],
         gap="small",
@@ -1963,7 +1965,6 @@ def _render_manuscript_tab(manuscript):
     with assistant_col:
         _render_ai_assistant(manuscript, section, sections, sources, evidence)
 
-    profile = get_manuscript_submission_profile(manuscript["id"])
     checks = _render_manuscript_checks(manuscript, sections, sources, profile)
     _render_publication_panel(
         manuscript,
@@ -2047,8 +2048,7 @@ def _render_source_card(source, manuscript, selected_section_id: int | None):
             st.link_button("Open original source", source_url, width="stretch")
 
 
-def _render_sources_tab(manuscript):
-    sources = get_manuscript_sources(manuscript["id"])
+def _render_sources_tab(manuscript, sections, sources):
     attached_ids = {source["library_item_id"] for source in sources}
     search = st.text_input(
         "Search project library",
@@ -2057,7 +2057,11 @@ def _render_sources_tab(manuscript):
     )
     available = [
         source
-        for source in get_project_library_sources(manuscript["project_id"], search)
+        for source in cached_read(
+            get_project_library_sources,
+            manuscript["project_id"],
+            search,
+        )
         if source["id"] not in attached_ids
     ]
     available_col, attached_col, evidence_col = st.columns(
@@ -2126,7 +2130,7 @@ def _render_sources_tab(manuscript):
             reference_section = next(
                 (
                     section
-                    for section in get_manuscript_sections(manuscript["id"])
+                    for section in sections
                     if section["section_type"] == "references"
                 ),
                 None,
@@ -2147,12 +2151,15 @@ def _render_sources_tab(manuscript):
 
     with evidence_col:
         render_html('<div class="writing-sources-scope"></div>')
-        attached_evidence = get_manuscript_evidence(manuscript["id"])
+        attached_evidence = cached_read(get_manuscript_evidence, manuscript["id"])
         attached_keys = {
             (row["evidence_type"], row["evidence_id"])
             for row in attached_evidence
         }
-        candidates = get_project_evidence_candidates(manuscript["project_id"])
+        candidates = cached_read(
+            get_project_evidence_candidates,
+            manuscript["project_id"],
+        )
         render_html(
             f'<div class="writing-panel-title">Project Evidence · {len(attached_evidence)}</div>'
             '<div class="writing-panel-caption">Experiments, summaries, and key ideas used by the assistant.</div>'
@@ -2204,11 +2211,19 @@ def _render_sources_tab(manuscript):
                     st.rerun()
 
 
-def _version_text(version_id: int | None, manuscript, sections) -> str:
+def _version_text(
+    version_id: int | None,
+    manuscript,
+    sections,
+    versions_by_id=None,
+) -> str:
     if version_id is None or version_id == 0:
         return _current_manuscript_text(manuscript, sections)
 
-    version = get_manuscript_version(version_id)
+    version = (versions_by_id or {}).get(version_id)
+
+    if version is None:
+        version = cached_read(get_manuscript_version, version_id)
     return snapshot_to_text(version["snapshot"]) if version else ""
 
 
@@ -2253,14 +2268,35 @@ def _version_section_text(version_id: int, current_section, versions_by_id) -> s
     )
 
 
-def _render_versions_tab(manuscript):
+def _render_versions_tab(manuscript, sections):
     render_html('<div class="writing-versions-scope"></div>')
-    versions = get_manuscript_versions(manuscript["id"])
-    version_details = {
-        version["id"]: get_manuscript_version(version["id"])
-        for version in versions
-    }
-    sections = get_manuscript_sections(manuscript["id"])
+    page_key = f"writing_versions_page_{manuscript['id']}"
+    requested_page = max(1, int(st.session_state.get(page_key, 1)))
+    version_page = cached_read(
+        get_manuscript_versions_page,
+        manuscript["id"],
+        page=requested_page,
+        page_size=20,
+    )
+    version_count = version_page["count"]
+    page_count = max(1, math.ceil(version_count / version_page["page_size"]))
+
+    if requested_page > page_count:
+        requested_page = page_count
+        st.session_state[page_key] = page_count
+        version_page = cached_read(
+            get_manuscript_versions_page,
+            manuscript["id"],
+            page=requested_page,
+            page_size=20,
+        )
+
+    versions = version_page["versions"]
+    version_details = {version["id"]: version for version in versions}
+    comments_by_version = cached_read(
+        get_manuscript_version_comments_for_versions,
+        tuple(version_details),
+    )
     create_col, compare_col = st.columns([1, 2], gap="small")
 
     with create_col:
@@ -2282,7 +2318,7 @@ def _render_versions_tab(manuscript):
             )
             custom_label = st.text_input(
                 "Custom label",
-                placeholder=f"Draft {len(versions) + 1}",
+                placeholder=f"Draft {version_count + 1}",
                 disabled=label_preset != "Custom label",
             )
             note = st.text_area(
@@ -2295,7 +2331,7 @@ def _render_versions_tab(manuscript):
         if submitted:
             try:
                 label = (
-                    custom_label or f"Draft {len(versions) + 1}"
+                    custom_label or f"Draft {version_count + 1}"
                     if label_preset == "Custom label"
                     else label_preset
                 )
@@ -2378,8 +2414,18 @@ def _render_versions_tab(manuscript):
                 versions_by_id,
             )
         else:
-            left_text = _version_text(left_version, manuscript, sections)
-            right_text = _version_text(right_version, manuscript, sections)
+            left_text = _version_text(
+                left_version,
+                manuscript,
+                sections,
+                versions_by_id,
+            )
+            right_text = _version_text(
+                right_version,
+                manuscript,
+                sections,
+                versions_by_id,
+            )
         diff = "\n".join(
             difflib.unified_diff(
                 left_text.splitlines(),
@@ -2395,10 +2441,18 @@ def _render_versions_tab(manuscript):
 
     st.divider()
     render_html(
-        f'<div class="writing-panel-title">Version history · {len(versions)}</div>'
+        f'<div class="writing-panel-title">Version history · {version_count}</div>'
     )
 
-    if not versions:
+    if page_count > 1:
+        st.selectbox(
+            "History page",
+            range(1, page_count + 1),
+            key=page_key,
+            format_func=lambda value: f"Page {value} of {page_count}",
+        )
+
+    if not version_count:
         st.info("No versions saved yet. AI replacements and exports create automatic snapshots.")
 
     for version in versions:
@@ -2545,7 +2599,7 @@ def _render_versions_tab(manuscript):
                         st.error(str(exc))
 
             with st.expander(f"Comments · {version['comment_count']}"):
-                comments = get_manuscript_version_comments(version["id"])
+                comments = comments_by_version.get(version["id"], [])
 
                 if not comments:
                     st.caption("No review comments attached to this version.")
@@ -2594,7 +2648,7 @@ if st.session_state.pop("writing_pending_clear_editors", False):
         if key.startswith("writing_section_content_") or key.startswith("writing_section_title_"):
             st.session_state.pop(key, None)
 
-projects = get_projects()
+projects = cached_read(get_projects)
 
 top_brand_col, top_context_col, top_space_col, top_user_col = st.columns(
     [1.25, 2.8, 1.9, 1.65],
@@ -2652,7 +2706,7 @@ with page_col:
             format_func=lambda value: projects_by_id[value]["name"],
         )
 
-    manuscripts = get_manuscripts(project_id)
+    manuscripts = cached_read(get_manuscripts, project_id)
     manuscript_ids = [manuscript["id"] for manuscript in manuscripts]
 
     if "writing_pending_manuscript_id" in st.session_state:
@@ -2693,11 +2747,12 @@ with page_col:
         _render_create_manuscript(project_id, "create_manuscript_empty_form")
         st.stop()
 
-    manuscript = get_manuscript(manuscript_id)
-    sections = get_manuscript_sections(manuscript_id)
-    sources = get_manuscript_sources(manuscript_id)
-    assets = get_manuscript_assets(manuscript_id)
-    submission_profile = get_manuscript_submission_profile(manuscript_id)
+    manuscript_workspace = cached_read(get_manuscript_workspace, manuscript_id)
+    manuscript = manuscript_workspace["manuscript"]
+    sections = manuscript_workspace["sections"]
+    sources = manuscript_workspace["sources"]
+    assets = manuscript_workspace["assets"]
+    submission_profile = manuscript_workspace["submission_profile"]
     meta_col, status_col, style_col, export_col = st.columns(
         [2.3, .8, .9, .75],
         gap="small",
@@ -2763,14 +2818,25 @@ with page_col:
             st.rerun()
 
     manuscript_tab, sources_tab, versions_tab = st.tabs(
-        ["Manuscript", "Sources", "Versions"]
+        ["Manuscript", "Sources", "Versions"],
+        key="writing_primary_tab",
+        on_change="rerun",
     )
 
-    with manuscript_tab:
-        _render_manuscript_tab(manuscript)
+    if manuscript_tab.open:
+        with manuscript_tab:
+            _render_manuscript_tab(
+                manuscript,
+                sections,
+                sources,
+                assets,
+                submission_profile,
+            )
 
-    with sources_tab:
-        _render_sources_tab(manuscript)
+    if sources_tab.open:
+        with sources_tab:
+            _render_sources_tab(manuscript, sections, sources)
 
-    with versions_tab:
-        _render_versions_tab(manuscript)
+    if versions_tab.open:
+        with versions_tab:
+            _render_versions_tab(manuscript, sections)

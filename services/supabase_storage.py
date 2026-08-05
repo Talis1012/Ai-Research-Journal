@@ -1,10 +1,13 @@
 from dataclasses import dataclass
+import threading
 from urllib.parse import quote
 
 import requests
+from requests.adapters import HTTPAdapter
 
 from db.database import get_current_app_user_id
 from utils.auth import current_id_token
+from utils.query_cache import cached_identity_read
 from utils.runtime_config import supabase_publishable_key, supabase_url
 
 
@@ -15,6 +18,7 @@ ALLOWED_BUCKETS = {
     "analysis-artifacts",
     "manuscript-assets",
 }
+_http_state = threading.local()
 
 
 class SupabaseStorageError(RuntimeError):
@@ -35,8 +39,21 @@ def is_storage_reference(value: str | None) -> bool:
     return str(value or "").startswith(STORAGE_SCHEME)
 
 
+def _http_session() -> requests.Session:
+    session = getattr(_http_state, "session", None)
+
+    if session is None:
+        session = requests.Session()
+        adapter = HTTPAdapter(pool_connections=8, pool_maxsize=16, max_retries=0)
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+        _http_state.session = session
+
+    return session
+
+
 def current_user_prefix() -> str:
-    return f"users/{get_current_app_user_id()}"
+    return f"users/{cached_identity_read(get_current_app_user_id)}"
 
 
 def user_object_key(relative_path: str) -> str:
@@ -134,7 +151,7 @@ def upload_bytes(
     headers = _request_headers(content_type=content_type)
     headers["cache-control"] = "3600"
     headers["x-upsert"] = "true" if upsert else "false"
-    response = requests.post(
+    response = _http_session().post(
         _object_url(bucket, key),
         headers=headers,
         data=content,
@@ -146,7 +163,7 @@ def upload_bytes(
 
 def download_bytes(reference: str, *, bucket: str | None = None) -> bytes:
     stored = parse_storage_reference(reference, bucket=bucket)
-    response = requests.get(
+    response = _http_session().get(
         _object_url(stored.bucket, stored.key),
         headers=_request_headers(),
         timeout=(10, 90),
@@ -160,7 +177,7 @@ def delete_object(reference: str | None, *, bucket: str | None = None):
         return
 
     stored = parse_storage_reference(reference, bucket=bucket)
-    response = requests.delete(
+    response = _http_session().delete(
         _object_url(stored.bucket),
         headers=_request_headers(content_type="application/json"),
         json={"prefixes": [stored.key]},
@@ -169,13 +186,47 @@ def delete_object(reference: str | None, *, bucket: str | None = None):
     _raise_for_storage(response, "delete the object")
 
 
+def create_signed_url(
+    reference: str,
+    *,
+    bucket: str | None = None,
+    expires_in: int = 300,
+) -> str:
+    stored = parse_storage_reference(reference, bucket=bucket)
+    expires_in = max(60, min(int(expires_in), 3600))
+    response = _http_session().post(
+        f"{supabase_url()}/storage/v1/object/sign/"
+        f"{quote(stored.bucket, safe='')}/{quote(stored.key, safe='/')}",
+        headers=_request_headers(content_type="application/json"),
+        json={"expiresIn": expires_in},
+        timeout=(10, 30),
+    )
+    _raise_for_storage(response, "create a signed object URL")
+    payload = response.json()
+    signed_path = str(payload.get("signedURL") or payload.get("signedUrl") or "")
+
+    if not signed_path:
+        raise SupabaseStorageError("Supabase Storage returned no signed object URL.")
+
+    if signed_path.startswith(("https://", "http://")):
+        return signed_path
+
+    if signed_path.startswith("/storage/v1/"):
+        return f"{supabase_url().rstrip('/')}{signed_path}"
+
+    if signed_path.startswith("/object/"):
+        return f"{supabase_url().rstrip('/')}/storage/v1{signed_path}"
+
+    return f"{supabase_url().rstrip('/')}/storage/v1/{signed_path.lstrip('/')}"
+
+
 def _list_folder(bucket: str, prefix: str) -> list[dict]:
     objects = []
     offset = 0
     page_size = 100
 
     while True:
-        response = requests.post(
+        response = _http_session().post(
             f"{supabase_url()}/storage/v1/object/list/{quote(bucket, safe='')}",
             headers=_request_headers(content_type="application/json"),
             json={
@@ -308,7 +359,7 @@ def delete_user_objects(bucket: str, relative_prefix: str = ""):
     keys = list_user_objects(bucket, relative_prefix)
 
     for index in range(0, len(keys), 100):
-        response = requests.delete(
+        response = _http_session().delete(
             _object_url(bucket),
             headers=_request_headers(content_type="application/json"),
             json={"prefixes": keys[index:index + 100]},

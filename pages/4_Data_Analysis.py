@@ -38,6 +38,7 @@ from services.library_service import (
     save_library_upload,
 )
 from utils.auth import authenticated_callback, require_auth
+from utils.query_cache import cached_blob_read, cached_read
 from utils.ui import (
     header_icons,
     load_css,
@@ -446,7 +447,12 @@ def cached_dataset(filename: str, content: bytes) -> pd.DataFrame:
 
 
 def library_datasets():
-    rows = get_library_items(item_type="dataset", sort="newest", limit=200)
+    rows = cached_read(
+        get_library_items,
+        item_type="dataset",
+        sort="newest",
+        limit=200,
+    )
     return [
         row
         for row in rows
@@ -497,7 +503,10 @@ def dataset_source(datasets) -> dict | None:
             filename = item["original_filename"] or f"{item['title']}{Path(item['file_path']).suffix}"
 
             try:
-                content = read_library_file(item["file_path"])
+                content = cached_blob_read(
+                    read_library_file,
+                    item["file_path"],
+                )
             except (FileNotFoundError, OSError, ValueError) as exc:
                 st.error(str(exc))
                 return None
@@ -1227,27 +1236,36 @@ def render_results_dashboard(run: dict | None, dataframe: pd.DataFrame | None = 
         performance_tab, distribution_tab, predictions_tab = st.tabs(
             ["Model performance", "Data distributions", "Predictions"],
             key=f"analysis_result_tabs_{run['id']}",
+            on_change="rerun",
         )
 
-        with performance_tab:
-            render_performance_charts(run)
+        if performance_tab.open:
+            with performance_tab:
+                render_performance_charts(run)
 
-        with distribution_tab:
-            render_data_distributions(dataframe, run)
+        if distribution_tab.open:
+            with distribution_tab:
+                render_data_distributions(dataframe, run)
 
-        with predictions_tab:
-            preview = pd.DataFrame(run["results"].get("preview", []))
+        if predictions_tab.open:
+            with predictions_tab:
+                preview = pd.DataFrame(run["results"].get("preview", []))
 
-            if preview.empty:
-                st.info("No prediction preview is available.")
-            else:
-                st.dataframe(preview, hide_index=True, width="stretch", height=270)
+                if preview.empty:
+                    st.info("No prediction preview is available.")
+                else:
+                    st.dataframe(
+                        preview,
+                        hide_index=True,
+                        width="stretch",
+                        height=270,
+                    )
 
         render_exports(run)
 
 
 def render_history():
-    runs = get_analysis_runs(limit=50)
+    runs = cached_read(get_analysis_runs, limit=50)
 
     if not runs:
         render_html(
@@ -1293,7 +1311,7 @@ def render_history():
                     st.rerun()
 
     if selected_id:
-        selected = get_analysis_run(int(selected_id))
+        selected = cached_read(get_analysis_run, int(selected_id))
         st.divider()
         render_results_dashboard(selected)
 
@@ -1398,7 +1416,11 @@ with page_col:
 
                 if st.session_state.get("analysis_active_signature") == source["signature"]:
                     active_id = st.session_state.get("analysis_active_run_id")
-                    active_run = get_analysis_run(int(active_id)) if active_id else None
+                    active_run = (
+                        cached_read(get_analysis_run, int(active_id))
+                        if active_id
+                        else None
+                    )
 
                 render_results_dashboard(active_run, dataframe)
 

@@ -85,6 +85,12 @@ Migrațiile creează toate tabelele, funcțiile de identitate, RLS, contoarele
 centralizate de rate-limit, ștergerea workspace-ului și bucket-urile private:
 `audio`, `library`, `analysis-artifacts`, `manuscript-assets`.
 
+Ultima migrare de performanță optimizează politicile RLS cu `initPlan`, adaugă
+indexurile pentru accesul per utilizator și căutarea Library și actualizează
+statisticile planner-ului. Detaliile de deployment, verificare și opțiunile de
+reducere suplimentară a latenței sunt în
+[`docs/PERFORMANCE_DEPLOYMENT.md`](docs/PERFORMANCE_DEPLOYMENT.md).
+
 ### Izolarea datelor
 
 La prima cerere, `ensure_current_app_user()` creează profilul aplicației din

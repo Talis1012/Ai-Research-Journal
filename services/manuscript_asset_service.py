@@ -10,6 +10,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from services.resource_limits import enforce_storage_quota, env_int
 from services.supabase_storage import (
+    create_signed_url,
     delete_object,
     delete_user_objects,
     download_bytes,
@@ -18,6 +19,7 @@ from services.supabase_storage import (
     storage_object_size,
     upload_bytes,
 )
+from utils.query_cache import cached_identity_read
 from utils.runtime_config import uses_supabase_storage
 from utils.user_scope import scoped_path
 
@@ -218,6 +220,19 @@ def read_manuscript_asset_file(storage_path: str) -> bytes:
         raise FileNotFoundError("The stored figure could not be found.")
 
     return safe_path.read_bytes()
+
+
+def manuscript_asset_preview_source(storage_path: str):
+    """Return a short-lived browser URL remotely, or bytes for local files."""
+    if is_storage_reference(storage_path):
+        return cached_identity_read(
+            create_signed_url,
+            storage_path,
+            bucket="manuscript-assets",
+            expires_in=300,
+        )
+
+    return read_manuscript_asset_file(storage_path)
 
 
 def delete_manuscript_asset_file(storage_path: str | None):

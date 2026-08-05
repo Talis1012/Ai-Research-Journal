@@ -1,4 +1,4 @@
-from db.database import get_connection
+from db.database import fetch_many, get_connection
 
 
 def _delete_project_files(*, audio_paths=(), asset_paths=(), manuscript_ids=()):
@@ -110,7 +110,8 @@ def create_chat(project_id: int, title: str, objective: str = "") -> int:
     return chat_id
 
 
-def get_chats(project_id: int):
+def get_chats(project_id: int, *, limit: int = 100):
+    limit = max(1, min(int(limit), 500))
     conn = get_connection()
 
     chats = conn.execute(
@@ -119,8 +120,9 @@ def get_chats(project_id: int):
         FROM chats
         WHERE project_id = ?
         ORDER BY created_at DESC
+        LIMIT ?
         """,
-        (project_id,)
+        (project_id, limit)
     ).fetchall()
 
     conn.close()
@@ -165,17 +167,22 @@ def add_message(chat_id: int, role: str, message_type: str, content: str) -> int
     return message_id
 
 
-def get_messages(chat_id: int):
+def get_messages(chat_id: int, *, limit: int = 200):
+    limit = max(1, min(int(limit), 1000))
     conn = get_connection()
 
     messages = conn.execute(
         """
-        SELECT *
-        FROM messages
-        WHERE chat_id = ?
-        ORDER BY created_at ASC
+        SELECT * FROM (
+            SELECT *
+            FROM messages
+            WHERE chat_id = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+        ) recent_messages
+        ORDER BY created_at ASC, id ASC
         """,
-        (chat_id,)
+        (chat_id, limit)
     ).fetchall()
 
     conn.close()
@@ -207,17 +214,22 @@ def create_audio_record(
     return audio_record_id
 
 
-def get_audio_records(chat_id: int):
+def get_audio_records(chat_id: int, *, limit: int = 200):
+    limit = max(1, min(int(limit), 1000))
     conn = get_connection()
 
     audio_records = conn.execute(
         """
-        SELECT *
-        FROM audio_records
-        WHERE chat_id = ?
-        ORDER BY created_at ASC
+        SELECT * FROM (
+            SELECT *
+            FROM audio_records
+            WHERE chat_id = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+        ) recent_audio
+        ORDER BY created_at ASC, id ASC
         """,
-        (chat_id,)
+        (chat_id, limit)
     ).fetchall()
 
     conn.close()
@@ -328,17 +340,22 @@ def add_experiment_ai_message(chat_id: int, role: str, content: str) -> int:
     return message_id
 
 
-def get_experiment_ai_messages(chat_id: int):
+def get_experiment_ai_messages(chat_id: int, *, limit: int = 100):
+    limit = max(1, min(int(limit), 500))
     conn = get_connection()
 
     messages = conn.execute(
         """
-        SELECT *
-        FROM experiment_ai_messages
-        WHERE chat_id = ?
+        SELECT * FROM (
+            SELECT *
+            FROM experiment_ai_messages
+            WHERE chat_id = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+        ) recent_ai_messages
         ORDER BY created_at ASC, id ASC
         """,
-        (chat_id,)
+        (chat_id, limit)
     ).fetchall()
 
     conn.close()
@@ -364,25 +381,79 @@ def clear_experiment_ai_messages(chat_id: int):
 
 #----------------------- AI ----------------------------
 
-def get_project_messages(project_id: int):
+def get_project_messages(project_id: int, *, limit: int = 500):
+    limit = max(1, min(int(limit), 2000))
     conn = get_connection()
 
     messages = conn.execute(
         """
-        SELECT
-            messages.*,
-            chats.title AS chat_title
-        FROM messages
-        JOIN chats ON messages.chat_id = chats.id
-        WHERE chats.project_id = ?
-        ORDER BY chats.created_at ASC, messages.created_at ASC
+        SELECT * FROM (
+            SELECT
+                messages.*,
+                chats.title AS chat_title
+            FROM messages
+            JOIN chats ON messages.chat_id = chats.id
+            WHERE chats.project_id = ?
+            ORDER BY messages.created_at DESC, messages.id DESC
+            LIMIT ?
+        ) recent_project_messages
+        ORDER BY created_at ASC, id ASC
         """,
-        (project_id,)
+        (project_id, limit)
     ).fetchall()
 
     conn.close()
 
     return messages
+
+
+def get_project_workspace(
+    project_id: int,
+    *,
+    chat_limit: int = 100,
+    message_limit: int = 500,
+):
+    chat_limit = max(1, min(int(chat_limit), 500))
+    message_limit = max(1, min(int(message_limit), 2000))
+    chats, messages, ideas = fetch_many(
+        [
+            (
+                """
+                SELECT * FROM chats
+                WHERE project_id = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (project_id, chat_limit),
+                "all",
+            ),
+            (
+                """
+                SELECT * FROM (
+                    SELECT messages.*, chats.title AS chat_title
+                    FROM messages
+                    JOIN chats ON messages.chat_id = chats.id
+                    WHERE chats.project_id = ?
+                    ORDER BY messages.created_at DESC, messages.id DESC
+                    LIMIT ?
+                ) recent_project_messages
+                ORDER BY created_at ASC, id ASC
+                """,
+                (project_id, message_limit),
+                "all",
+            ),
+            (
+                """
+                SELECT * FROM project_ideas
+                WHERE project_id = ?
+                ORDER BY created_at DESC
+                """,
+                (project_id,),
+                "all",
+            ),
+        ]
+    )
+    return chats, messages, ideas
 
 
 def save_summary(
@@ -553,6 +624,28 @@ def get_project_summaries(project_id: int, summary_style: str | None = None):
 
     conn.close()
 
+    return summaries
+
+
+def get_all_project_summaries(project_id: int):
+    conn = get_connection()
+    summaries = conn.execute(
+        """
+        SELECT summary.*
+        FROM summaries summary
+        LEFT JOIN chats chat ON chat.id = summary.chat_id
+        WHERE (
+            summary.scope = 'project'
+            AND summary.project_id = ?
+        ) OR (
+            summary.scope = 'chat'
+            AND chat.project_id = ?
+        )
+        ORDER BY summary.created_at DESC, summary.id DESC
+        """,
+        (project_id, project_id),
+    ).fetchall()
+    conn.close()
     return summaries
 
 

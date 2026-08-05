@@ -14,12 +14,14 @@ from services.resource_limits import (
     env_int,
 )
 from services.supabase_storage import (
+    create_signed_url,
     delete_object,
     download_bytes,
     enforce_user_storage_quota,
     is_storage_reference,
     upload_bytes,
 )
+from utils.query_cache import cached_identity_read
 from utils.runtime_config import uses_supabase_storage
 from utils.user_scope import scoped_path
 
@@ -288,6 +290,18 @@ def read_audio_file(file_path: str) -> bytes:
         raise FileNotFoundError("The stored audio recording could not be found.")
 
     return path.read_bytes()
+
+
+def audio_preview_source(file_path: str):
+    if is_storage_reference(file_path):
+        return cached_identity_read(
+            create_signed_url,
+            file_path,
+            bucket="audio",
+            expires_in=300,
+        )
+
+    return read_audio_file(file_path)
 
 
 def delete_audio_file(file_path: str):

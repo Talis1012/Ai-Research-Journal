@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from services.supabase_storage import (
+    create_signed_url,
     delete_object,
     download_bytes,
     enforce_user_storage_quota,
@@ -37,8 +38,9 @@ class SupabaseStorageTestCase(unittest.TestCase):
     def tearDown(self):
         patch.stopall()
 
-    @patch("services.supabase_storage.requests.post")
-    def test_upload_uses_private_user_prefix_and_auth0_id_token(self, post):
+    @patch("services.supabase_storage._http_session")
+    def test_upload_uses_private_user_prefix_and_auth0_id_token(self, session):
+        post = session.return_value.post
         post.return_value = Mock(ok=True, status_code=200)
         reference = upload_bytes(
             "library",
@@ -63,8 +65,9 @@ class SupabaseStorageTestCase(unittest.TestCase):
         )
         self.assertEqual(request.kwargs["headers"]["x-upsert"], "false")
 
-    @patch("services.supabase_storage.requests.get")
-    def test_download_rejects_cross_user_reference_before_http(self, get):
+    @patch("services.supabase_storage._http_session")
+    def test_download_rejects_cross_user_reference_before_http(self, session):
+        get = session.return_value.get
         foreign = (
             "supabase://library/users/"
             "22222222-2222-2222-2222-222222222222/paper.pdf"
@@ -75,8 +78,9 @@ class SupabaseStorageTestCase(unittest.TestCase):
 
         get.assert_not_called()
 
-    @patch("services.supabase_storage.requests.delete")
-    def test_delete_uses_storage_remove_endpoint(self, delete):
+    @patch("services.supabase_storage._http_session")
+    def test_delete_uses_storage_remove_endpoint(self, session):
+        delete = session.return_value.delete
         delete.return_value = Mock(ok=True, status_code=200)
         reference = (
             "supabase://audio/users/"
@@ -97,6 +101,30 @@ class SupabaseStorageTestCase(unittest.TestCase):
                 ]
             },
         )
+
+    @patch("services.supabase_storage._http_session")
+    def test_signed_url_keeps_download_in_the_browser(self, session):
+        post = session.return_value.post
+        post.return_value = Mock(
+            ok=True,
+            status_code=200,
+            json=Mock(return_value={"signedURL": "/object/sign/path?token=test"}),
+        )
+        reference = (
+            "supabase://manuscript-assets/users/"
+            "11111111-1111-1111-1111-111111111111/figure.png"
+        )
+
+        signed_url = create_signed_url(
+            reference,
+            bucket="manuscript-assets",
+        )
+
+        self.assertEqual(
+            signed_url,
+            "https://project.supabase.co/storage/v1/object/sign/path?token=test",
+        )
+        self.assertEqual(post.call_args.kwargs["json"], {"expiresIn": 300})
 
     def test_reference_parser_rejects_unknown_bucket(self):
         with self.assertRaises(ValueError):

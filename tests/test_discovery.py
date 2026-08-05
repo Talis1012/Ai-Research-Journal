@@ -141,8 +141,9 @@ class OpenAlexServiceTestCase(unittest.TestCase):
         self.assertEqual(work["doi"], "10.1000/test")
         self.assertEqual(work["url"], "https://doi.org/10.1000/test")
 
-    @patch("services.openalex_service.requests.get")
-    def test_search_sends_filters_sort_and_paging(self, mocked_get):
+    @patch("services.openalex_service._http_session")
+    def test_search_sends_filters_sort_and_paging(self, mocked_session):
+        mocked_get = mocked_session.return_value.get
         response = Mock()
         response.ok = True
         response.json.return_value = {"meta": {"count": 1}, "results": []}

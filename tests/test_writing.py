@@ -32,7 +32,10 @@ from db.writing_queries import (
     get_manuscript_submission_profile,
     get_manuscript_version,
     get_manuscript_version_comments,
+    get_manuscript_version_comments_for_versions,
     get_manuscript_versions,
+    get_manuscript_versions_page,
+    get_manuscript_workspace,
     get_project_library_sources,
     insert_section_citation,
     insert_section_citations,
@@ -169,6 +172,19 @@ class WritingTestCase(unittest.TestCase):
         self.assertIn("[@stability2025]", updated["content_md"])
         self.assertNotIn("[@smith2025]", updated["content_md"])
 
+    def test_manuscript_workspace_batches_complete_page_state(self):
+        attach_manuscript_source(self.manuscript_id, self.item_id)
+        workspace = get_manuscript_workspace(self.manuscript_id)
+
+        self.assertEqual(workspace["manuscript"]["id"], self.manuscript_id)
+        self.assertEqual(len(workspace["sections"]), 7)
+        self.assertEqual(len(workspace["sources"]), 1)
+        self.assertEqual(workspace["assets"], [])
+        self.assertEqual(
+            workspace["submission_profile"]["journal_template"],
+            "General IMRaD",
+        )
+
     def test_versions_restore_and_duplicate_complete_snapshot(self):
         section = self._results_section()
         update_manuscript_section(section["id"], content_md="Original result.")
@@ -200,6 +216,14 @@ class WritingTestCase(unittest.TestCase):
         self.assertEqual(get_manuscript(duplicate_id)["title"], "Duplicate draft")
         self.assertEqual(len(get_manuscript_sections(duplicate_id)), 7)
         self.assertEqual(len(get_manuscript_versions(self.manuscript_id)), 1)
+        page = get_manuscript_versions_page(self.manuscript_id, page_size=5)
+        self.assertEqual(page["count"], 1)
+        self.assertEqual(page["versions"][0]["id"], version_id)
+        self.assertIn("snapshot", page["versions"][0])
+        self.assertEqual(
+            get_manuscript_version_comments_for_versions((version_id,)),
+            {},
+        )
 
     def test_ai_response_and_all_export_formats(self):
         source_key = attach_manuscript_source(self.manuscript_id, self.item_id)

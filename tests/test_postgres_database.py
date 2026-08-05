@@ -108,6 +108,39 @@ class PostgresDatabaseTestCase(unittest.TestCase):
         pipeline_events = [event for event in raw.events if event[0] == "pipeline_enter"]
         self.assertEqual(len(pipeline_events), 2)
 
+    def test_independent_reads_share_one_pipeline(self):
+        raw = _RecordingRawConnection()
+        connection = _PostgresConnection(raw, pool=None)
+
+        results = connection.fetch_many(
+            [
+                ("SELECT ? AS first", (1,), "one"),
+                ("SELECT ? AS second", (2,), "all"),
+                ("SELECT 3 AS third", (), "all"),
+            ]
+        )
+
+        executions = [event for event in raw.events if event[0] == "execute"]
+        pipelines = [event for event in raw.events if event[0] == "pipeline_enter"]
+        self.assertEqual(results, [None, [], []])
+        self.assertEqual(len(pipelines), 1)
+        self.assertEqual(len(executions), 4)
+        self.assertIn("set_config('request.jwt.claims'", executions[0][2])
+        self.assertEqual(executions[1][2], "SELECT %s AS first")
+
+    def test_committed_mutation_invalidates_private_read_cache(self):
+        raw = _RecordingRawConnection()
+        connection = _PostgresConnection(raw, pool=None)
+
+        with patch(
+            "utils.query_cache.invalidate_user_data_cache"
+        ) as invalidate:
+            connection.execute("UPDATE projects SET name = ? WHERE id = ?", ("A", 1))
+            connection.commit()
+            connection.commit()
+
+        invalidate.assert_called_once_with()
+
     def test_postgres_user_is_initialized_once_per_streamlit_session(self):
         session_state = {}
 

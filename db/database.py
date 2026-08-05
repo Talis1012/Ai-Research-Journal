@@ -151,6 +151,13 @@ def _insert_table(statement: str) -> str | None:
     return match.group(1).lower() if match else None
 
 
+def _mutates_data(statement: str) -> bool:
+    normalized = str(statement or "").lstrip()
+    return bool(re.match(r"(?:INSERT|UPDATE|DELETE)\b", normalized, re.I)) or bool(
+        re.match(r"WITH\b[\s\S]*?\b(?:INSERT|UPDATE|DELETE)\b", normalized, re.I)
+    )
+
+
 class _PostgresCursor:
     def __init__(self, connection, cursor=None):
         self._connection = connection
@@ -173,6 +180,9 @@ class _PostgresCursor:
             translated,
             params if params is not None else (),
         )
+        self._connection._dirty = self._connection._dirty or _mutates_data(
+            translated
+        )
         self._lastrowid = None
 
         if table in _IDENTITY_TABLES:
@@ -184,10 +194,14 @@ class _PostgresCursor:
         return self
 
     def executemany(self, statement, params_seq):
+        translated = _translate_postgres_sql(str(statement))
         self._connection._executemany_in_request_context(
             self._cursor,
-            _translate_postgres_sql(str(statement)),
+            translated,
             params_seq,
+        )
+        self._connection._dirty = self._connection._dirty or _mutates_data(
+            translated
         )
         self._lastrowid = None
         return self
@@ -216,6 +230,7 @@ class _PostgresConnection:
         self._pool = pool
         self._context_ready = False
         self._closed = False
+        self._dirty = False
 
     @staticmethod
     def _request_claims_json():
@@ -287,13 +302,66 @@ class _PostgresConnection:
     def executemany(self, statement, params_seq):
         return self.cursor().executemany(statement, params_seq)
 
+    def fetch_many(self, query_specs):
+        """Run independent read queries in one PostgreSQL pipeline round trip."""
+        specs = list(query_specs)
+        cursors = []
+        context_cursor = None
+
+        try:
+            if not self._context_ready:
+                context_cursor = self._raw.cursor()
+
+            with self._raw.pipeline():
+                if context_cursor is not None:
+                    context_cursor.execute(
+                        """
+                        select
+                            set_config('request.jwt.claims', %s, true),
+                            set_config('role', 'authenticated', true)
+                        """,
+                        (self._request_claims_json(),),
+                    )
+
+                for statement, params, mode in specs:
+                    translated = _translate_postgres_sql(str(statement))
+
+                    if _mutates_data(translated):
+                        raise ValueError("fetch_many accepts read-only queries only.")
+
+                    if mode not in {"one", "all"}:
+                        raise ValueError("fetch_many mode must be 'one' or 'all'.")
+
+                    cursor = self._raw.cursor()
+                    cursor.execute(translated, params if params is not None else ())
+                    cursors.append((cursor, mode))
+
+            self._context_ready = True
+            return [
+                cursor.fetchone() if mode == "one" else cursor.fetchall()
+                for cursor, mode in cursors
+            ]
+        finally:
+            if context_cursor is not None:
+                context_cursor.close()
+
+            for cursor, _ in cursors:
+                cursor.close()
+
     def commit(self):
         self._raw.commit()
         self._context_ready = False
 
+        if self._dirty:
+            from utils.query_cache import invalidate_user_data_cache
+
+            invalidate_user_data_cache()
+            self._dirty = False
+
     def rollback(self):
         self._raw.rollback()
         self._context_ready = False
+        self._dirty = False
 
     def close(self):
         if self._closed:
@@ -303,6 +371,7 @@ class _PostgresConnection:
             self._raw.rollback()
         finally:
             self._context_ready = False
+            self._dirty = False
             self._closed = True
             self._pool.putconn(self._raw)
 
@@ -402,6 +471,34 @@ def get_connection():
         return _get_postgres_connection()
 
     return _get_sqlite_connection()
+
+
+def fetch_many(query_specs):
+    """Fetch several independent result sets, pipelined on PostgreSQL."""
+    conn = get_connection()
+
+    try:
+        if isinstance(conn, _PostgresConnection):
+            return conn.fetch_many(query_specs)
+
+        results = []
+
+        for statement, params, mode in query_specs:
+            if _mutates_data(statement):
+                raise ValueError("fetch_many accepts read-only queries only.")
+
+            cursor = conn.execute(statement, params if params is not None else ())
+
+            if mode == "one":
+                results.append(cursor.fetchone())
+            elif mode == "all":
+                results.append(cursor.fetchall())
+            else:
+                raise ValueError("fetch_many mode must be 'one' or 'all'.")
+
+        return results
+    finally:
+        conn.close()
 
 
 def get_current_app_user_id() -> str:

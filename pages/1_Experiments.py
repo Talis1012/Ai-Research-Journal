@@ -19,19 +19,16 @@ from db.queries import (
     delete_project_ideas,
     get_audio_record_by_message_id,
     get_audio_records,
+    get_all_project_summaries,
     get_chat_summary,
-    get_chat_summaries,
-    get_chats,
     get_experiment_ai_messages,
     get_messages,
     get_mindmap_edges,
     get_mindmap_last_sync,
     get_mindmap_node_by_key,
     get_mindmap_nodes,
-    get_project_ideas,
-    get_project_messages,
+    get_project_workspace,
     get_project_summary,
-    get_project_summaries,
     get_projects,
     save_project_ideas,
     save_summary,
@@ -58,12 +55,13 @@ from services.summary_service import (
     generate_project_summary,
 )
 from services.transcription_service import (
+    audio_preview_source,
     delete_audio_file,
-    read_audio_file,
     save_audio_file,
     transcribe_audio,
 )
 from utils.auth import require_auth
+from utils.query_cache import cached_read
 from utils.ui import (
     chat_message,
     compact_date,
@@ -616,7 +614,10 @@ def render_notes_tab(selected_chat, messages, audio_records):
                     disabled=not confirm_delete,
                 ):
                     if message["type"] == "audio_transcript":
-                        audio_record = get_audio_record_by_message_id(message["id"])
+                        audio_record = cached_read(
+                            get_audio_record_by_message_id,
+                            message["id"],
+                        )
 
                         if audio_record:
                             delete_audio_file(audio_record["file_path"])
@@ -711,8 +712,11 @@ def render_notes_tab(selected_chat, messages, audio_records):
                 st.caption(compact_date(record["created_at"]))
 
                 try:
-                    st.audio(read_audio_file(record["file_path"]), format="audio/wav")
-                except (FileNotFoundError, OSError, ValueError):
+                    st.audio(
+                        audio_preview_source(record["file_path"]),
+                        format="audio/wav",
+                    )
+                except (FileNotFoundError, OSError, ValueError, RuntimeError):
                     st.caption("Înregistrarea audio nu mai este disponibilă.")
 
 
@@ -844,7 +848,7 @@ def generate_selected_insight(
             st.error("Select an experiment first.")
             return
 
-        messages = get_messages(selected_chat["id"])
+        messages = cached_read(get_messages, selected_chat["id"])
 
         if not messages:
             st.error("Add experiment notes before generating its summary.")
@@ -1025,9 +1029,14 @@ def render_insight_reader(
         active_summary = None
 
         if selection == "project":
-            active_summary = get_project_summary(project_id, summary_style)
+            active_summary = cached_read(
+                get_project_summary,
+                project_id,
+                summary_style,
+            )
         elif selection == "chat" and reader_selected_chat:
-            active_summary = get_chat_summary(
+            active_summary = cached_read(
+                get_chat_summary,
                 reader_selected_chat["id"],
                 summary_style,
             )
@@ -1435,7 +1444,7 @@ def render_interactive_mindmap(
     if selected_node_key:
         st.session_state[state_key] = selected_node_key
 
-    last_sync = get_mindmap_last_sync(project_id)
+    last_sync = cached_read(get_mindmap_last_sync, project_id)
     st.caption(
         f"{len(mindmap_nodes)} nodes · {len(mindmap_edges)} connections"
         + (f" · updated {compact_date(last_sync)}" if last_sync else "")
@@ -1446,7 +1455,11 @@ def render_interactive_mindmap(
         st.info("Click a node to start a contextual conversation about it.")
         return
 
-    selected_node = get_mindmap_node_by_key(project_id, stored_node_key)
+    selected_node = cached_read(
+        get_mindmap_node_by_key,
+        project_id,
+        stored_node_key,
+    )
 
     if selected_node:
         render_node_context_chat(
@@ -1457,12 +1470,8 @@ def render_interactive_mindmap(
 
 
 def collect_project_summaries(project_id: int, chats) -> list:
-    summaries = list(get_project_summaries(project_id))
-
-    for chat in chats:
-        summaries.extend(get_chat_summaries(chat["id"]))
-
-    return summaries
+    del chats
+    return list(cached_read(get_all_project_summaries, project_id))
 
 
 def render_project_ai_chat(
@@ -1603,9 +1612,159 @@ def render_insights(
         )
 
 
+def render_workspace_tab_content(
+    selected_project,
+    selected_chat,
+    chats,
+    project_messages,
+    search_across_project,
+):
+    list_col, content_col, chat_col = st.columns(
+        [1.35, 2.7, 2.05],
+        gap="small",
+    )
+
+    with list_col:
+        render_experiment_list(
+            selected_project=selected_project,
+            chats=chats,
+            project_messages=project_messages,
+            search_across_project=search_across_project,
+        )
+
+    if not selected_chat:
+        with content_col:
+            render_html('<div class="experiment-content-scope"></div>')
+            render_html(
+                """
+                <div class="empty-state">
+                    <strong>Select or create an experiment</strong>
+                    Notes and audio transcription will appear here.
+                </div>
+                """
+            )
+
+        with chat_col:
+            render_html('<div class="experiment-ai-chat-scope"></div>')
+            render_html(
+                """
+                <div class="panel-title">AI Chat</div>
+                <div class="panel-subtitle">Select an experiment to start a contextual conversation.</div>
+                """
+            )
+        return
+
+    messages = cached_read(get_messages, selected_chat["id"])
+    audio_records = cached_read(get_audio_records, selected_chat["id"])
+    ai_messages = cached_read(
+        get_experiment_ai_messages,
+        selected_chat["id"],
+    )
+
+    with content_col:
+        render_html('<div class="experiment-content-scope"></div>')
+        title_col, settings_col = st.columns([1, 0.15], gap="small")
+
+        with title_col:
+            render_html(
+                f"""
+                <div class="eyebrow">Selected experiment</div>
+                <div class="panel-title">{safe_html(selected_chat['title'])}</div>
+                <div class="panel-subtitle">{safe_html(selected_chat['objective'] or 'No objective added yet.')}</div>
+                """
+            )
+
+        with settings_col:
+            with st.popover("•••"):
+                render_experiment_settings(selected_chat, chats)
+
+        st.markdown("#### Notes")
+        render_notes_tab(selected_chat, messages, audio_records)
+
+    with chat_col:
+        render_html('<div class="experiment-ai-chat-scope"></div>')
+        render_html(
+            f"""
+            <div class="panel-title">AI Chat</div>
+            <div class="panel-subtitle">Always connected to {safe_html(selected_chat['title'])}</div>
+            """
+        )
+        render_ai_chat_panel(
+            selected_project,
+            selected_chat,
+            messages,
+            ai_messages,
+        )
+
+
+def render_insights_tab_content(
+    selected_project,
+    selected_chat,
+    chats,
+    project_messages,
+    project_ideas,
+):
+    project_id = selected_project["id"]
+    failure_signature_key = f"mindmap_sync_failure_signature_{project_id}"
+    failure_message_key = f"mindmap_sync_failure_message_{project_id}"
+
+    try:
+        sync_signature = get_pending_mindmap_signature(
+            project_id,
+            project_messages,
+            project_ideas,
+        )
+    except Exception as exc:
+        sync_signature = ""
+        st.session_state[failure_message_key] = str(exc)
+
+    mindmap_nodes = cached_read(get_mindmap_nodes, project_id)
+    mindmap_edges = cached_read(get_mindmap_edges, project_id)
+    render_insights(
+        selected_project=selected_project,
+        selected_chat=selected_chat,
+        chats=chats,
+        project_messages=project_messages,
+        project_ideas=project_ideas,
+        mindmap_nodes=mindmap_nodes,
+        mindmap_edges=mindmap_edges,
+    )
+
+    if sync_signature:
+        st.info(
+            "The mind map has unsynchronized notes or ideas. "
+            "Updating it uses one AI request."
+        )
+
+        if st.button(
+            "Synchronize mind map with AI",
+            key=f"sync_mindmap_{project_id}",
+            width="stretch",
+        ):
+            try:
+                with st.spinner("Synchronizing the mind map..."):
+                    sync_project_mindmap(
+                        project_id=project_id,
+                        project_name=selected_project["name"],
+                        messages=project_messages,
+                        ideas=project_ideas,
+                    )
+                st.session_state.pop(failure_signature_key, None)
+                st.session_state.pop(failure_message_key, None)
+                st.rerun()
+            except Exception as exc:
+                st.session_state[failure_signature_key] = sync_signature
+                st.session_state[failure_message_key] = str(exc)
+
+    mindmap_error = st.session_state.get(failure_message_key)
+
+    if mindmap_error:
+        st.warning(f"Mind map synchronization needs attention: {mindmap_error}")
+
+
 render_page_css()
 
-projects = get_projects()
+projects = cached_read(get_projects)
 
 top_brand_col, top_project_col, top_search_col, top_user_col = st.columns(
     [1.05, 3.0, 1.9, 1.65],
@@ -1723,9 +1882,10 @@ with page_col:
         render_create_project_form(key="first_project_form")
         st.stop()
 
-    chats = get_chats(selected_project["id"])
-    project_messages = get_project_messages(selected_project["id"])
-    project_ideas = get_project_ideas(selected_project["id"])
+    chats, project_messages, project_ideas = cached_read(
+        get_project_workspace,
+        selected_project["id"],
+    )
 
     requested_chat_id = None
     requested_chat_value = st.query_params.get("chat_id")
@@ -1752,141 +1912,28 @@ with page_col:
         None,
     )
 
-    mindmap_failure_signature_key = (
-        f"mindmap_sync_failure_signature_{selected_project['id']}"
+    workspace_tab, insights_tab = st.tabs(
+        ["Workspace", "Insights"],
+        key="experiments_primary_tab",
+        on_change="rerun",
     )
-    mindmap_failure_message_key = (
-        f"mindmap_sync_failure_message_{selected_project['id']}"
-    )
 
-    try:
-        mindmap_sync_signature = get_pending_mindmap_signature(
-            selected_project["id"],
-            project_messages,
-            project_ideas,
-        )
-    except Exception as exc:
-        mindmap_sync_signature = ""
-        st.session_state[mindmap_failure_message_key] = str(exc)
-
-    workspace_tab, insights_tab = st.tabs(["Workspace", "Insights"])
-
-    with workspace_tab:
-        list_col, content_col, chat_col = st.columns(
-            [1.35, 2.7, 2.05],
-            gap="small",
-        )
-
-        with list_col:
-            render_experiment_list(
+    if workspace_tab.open:
+        with workspace_tab:
+            render_workspace_tab_content(
                 selected_project=selected_project,
+                selected_chat=selected_chat,
                 chats=chats,
                 project_messages=project_messages,
                 search_across_project=search_across_project,
             )
 
-        if not selected_chat:
-            with content_col:
-                render_html('<div class="experiment-content-scope"></div>')
-                render_html(
-                    """
-                    <div class="empty-state">
-                        <strong>Select or create an experiment</strong>
-                        Notes and audio transcription will appear here.
-                    </div>
-                    """
-                )
-
-            with chat_col:
-                render_html('<div class="experiment-ai-chat-scope"></div>')
-                render_html(
-                    """
-                    <div class="panel-title">AI Chat</div>
-                    <div class="panel-subtitle">Select an experiment to start a contextual conversation.</div>
-                    """
-                )
-        else:
-            messages = get_messages(selected_chat["id"])
-            audio_records = get_audio_records(selected_chat["id"])
-            ai_messages = get_experiment_ai_messages(selected_chat["id"])
-
-            with content_col:
-                render_html('<div class="experiment-content-scope"></div>')
-                title_col, settings_col = st.columns([1, 0.15], gap="small")
-
-                with title_col:
-                    render_html(
-                        f"""
-                        <div class="eyebrow">Selected experiment</div>
-                        <div class="panel-title">{safe_html(selected_chat['title'])}</div>
-                        <div class="panel-subtitle">{safe_html(selected_chat['objective'] or 'No objective added yet.')}</div>
-                        """
-                    )
-
-                with settings_col:
-                    with st.popover("•••"):
-                        render_experiment_settings(selected_chat, chats)
-
-                st.markdown("#### Notes")
-                render_notes_tab(selected_chat, messages, audio_records)
-
-            with chat_col:
-                render_html('<div class="experiment-ai-chat-scope"></div>')
-                render_html(
-                    f"""
-                    <div class="panel-title">AI Chat</div>
-                    <div class="panel-subtitle">Always connected to {safe_html(selected_chat['title'])}</div>
-                    """
-                )
-                render_ai_chat_panel(
-                    selected_project,
-                    selected_chat,
-                    messages,
-                    ai_messages,
-                )
-
-    with insights_tab:
-        mindmap_nodes = get_mindmap_nodes(selected_project["id"])
-        mindmap_edges = get_mindmap_edges(selected_project["id"])
-        render_insights(
-            selected_project=selected_project,
-            selected_chat=selected_chat,
-            chats=chats,
-            project_messages=project_messages,
-            project_ideas=project_ideas,
-            mindmap_nodes=mindmap_nodes,
-            mindmap_edges=mindmap_edges,
-        )
-
-        if mindmap_sync_signature:
-            st.info(
-                "The mind map has unsynchronized notes or ideas. "
-                "Updating it uses one AI request."
+    if insights_tab.open:
+        with insights_tab:
+            render_insights_tab_content(
+                selected_project=selected_project,
+                selected_chat=selected_chat,
+                chats=chats,
+                project_messages=project_messages,
+                project_ideas=project_ideas,
             )
-
-            if st.button(
-                "Synchronize mind map with AI",
-                key=f"sync_mindmap_{selected_project['id']}",
-                width="stretch",
-            ):
-                try:
-                    with st.spinner("Synchronizing the mind map..."):
-                        sync_project_mindmap(
-                            project_id=selected_project["id"],
-                            project_name=selected_project["name"],
-                            messages=project_messages,
-                            ideas=project_ideas,
-                        )
-                    st.session_state.pop(mindmap_failure_signature_key, None)
-                    st.session_state.pop(mindmap_failure_message_key, None)
-                    st.rerun()
-                except Exception as exc:
-                    st.session_state[mindmap_failure_signature_key] = (
-                        mindmap_sync_signature
-                    )
-                    st.session_state[mindmap_failure_message_key] = str(exc)
-
-        mindmap_error = st.session_state.get(mindmap_failure_message_key)
-
-        if mindmap_error:
-            st.warning(f"Mind map synchronization needs attention: {mindmap_error}")
