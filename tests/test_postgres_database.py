@@ -139,7 +139,7 @@ class PostgresDatabaseTestCase(unittest.TestCase):
             connection.commit()
             connection.commit()
 
-        invalidate.assert_called_once_with()
+        invalidate.assert_called_once_with({"projects"})
 
     def test_postgres_user_is_initialized_once_per_streamlit_session(self):
         session_state = {}

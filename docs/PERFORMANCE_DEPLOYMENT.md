@@ -3,9 +3,16 @@
 ## Ce este implementat
 
 - cache privat per utilizator pentru citirile PostgreSQL, cu TTL scurt și
-  invalidare imediată după orice mutație confirmată;
+  invalidare selectivă pe tabele după fiecare mutație confirmată; salvarea unei
+  notițe nu mai golește cache-ul proiectelor, bibliotecii și manuscriselor;
 - pipeline PostgreSQL pentru contextul RLS și pentru grupurile de interogări
   independente din Experiments și Paper Writing;
+- fragmente Streamlit independente pentru Notes, chatul AI al experimentului,
+  lista și chatul Discovery din Library și editorul/asistentul Paper Writing;
+  acțiunile locale redesenează doar panoul afectat, nu întreaga pagină;
+- autosave Paper Writing reutilizează aceeași conexiune pentru citire și scriere,
+  nu recalculează citările la schimbarea titlului și sincronizează citările în
+  lot în loc de câte o interogare per citare;
 - randare lazy pentru taburile principale și pentru graficele Data Analysis;
 - eliminarea interogărilor N+1 din istoricul versiunilor și comentariilor;
 - paginare/limite pentru versiuni, experimente, mesaje, audio și conversații AI;
@@ -36,6 +43,8 @@ supabase db lint --linked --level warning
 ```
 
 Versiunea `20260805150000` trebuie să apară atât local, cât și remote.
+Optimizările de cache și rerulare adăugate ulterior sunt exclusiv în codul
+aplicației și nu necesită o migrare Supabase nouă.
 
 ## Setări recomandate
 

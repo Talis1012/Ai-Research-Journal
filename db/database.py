@@ -151,11 +151,22 @@ def _insert_table(statement: str) -> str | None:
     return match.group(1).lower() if match else None
 
 
-def _mutates_data(statement: str) -> bool:
+def _mutated_tables(statement: str) -> set[str]:
     normalized = str(statement or "").lstrip()
-    return bool(re.match(r"(?:INSERT|UPDATE|DELETE)\b", normalized, re.I)) or bool(
-        re.match(r"WITH\b[\s\S]*?\b(?:INSERT|UPDATE|DELETE)\b", normalized, re.I)
+    patterns = (
+        r"\bINSERT\s+INTO\s+(?:public\.)?([a-zA-Z_][a-zA-Z0-9_]*)",
+        r"\bUPDATE\s+(?:public\.)?([a-zA-Z_][a-zA-Z0-9_]*)",
+        r"\bDELETE\s+FROM\s+(?:public\.)?([a-zA-Z_][a-zA-Z0-9_]*)",
     )
+    return {
+        match.group(1).lower()
+        for pattern in patterns
+        for match in re.finditer(pattern, normalized, re.I)
+    }
+
+
+def _mutates_data(statement: str) -> bool:
+    return bool(_mutated_tables(statement))
 
 
 class _PostgresCursor:
@@ -180,9 +191,7 @@ class _PostgresCursor:
             translated,
             params if params is not None else (),
         )
-        self._connection._dirty = self._connection._dirty or _mutates_data(
-            translated
-        )
+        self._connection._dirty_tables.update(_mutated_tables(translated))
         self._lastrowid = None
 
         if table in _IDENTITY_TABLES:
@@ -200,9 +209,7 @@ class _PostgresCursor:
             translated,
             params_seq,
         )
-        self._connection._dirty = self._connection._dirty or _mutates_data(
-            translated
-        )
+        self._connection._dirty_tables.update(_mutated_tables(translated))
         self._lastrowid = None
         return self
 
@@ -230,7 +237,7 @@ class _PostgresConnection:
         self._pool = pool
         self._context_ready = False
         self._closed = False
-        self._dirty = False
+        self._dirty_tables: set[str] = set()
 
     @staticmethod
     def _request_claims_json():
@@ -352,16 +359,17 @@ class _PostgresConnection:
         self._raw.commit()
         self._context_ready = False
 
-        if self._dirty:
+        if self._dirty_tables:
             from utils.query_cache import invalidate_user_data_cache
 
-            invalidate_user_data_cache()
-            self._dirty = False
+            dirty_tables = set(self._dirty_tables)
+            self._dirty_tables.clear()
+            invalidate_user_data_cache(dirty_tables)
 
     def rollback(self):
         self._raw.rollback()
         self._context_ready = False
-        self._dirty = False
+        self._dirty_tables.clear()
 
     def close(self):
         if self._closed:
@@ -371,7 +379,7 @@ class _PostgresConnection:
             self._raw.rollback()
         finally:
             self._context_ready = False
-            self._dirty = False
+            self._dirty_tables.clear()
             self._closed = True
             self._pool.putconn(self._raw)
 

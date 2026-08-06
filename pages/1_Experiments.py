@@ -60,7 +60,7 @@ from services.transcription_service import (
     save_audio_file,
     transcribe_audio,
 )
-from utils.auth import require_auth
+from utils.auth import authenticated_callback, require_auth
 from utils.query_cache import cached_read
 from utils.ui import (
     chat_message,
@@ -450,12 +450,16 @@ def render_delete_project_control(selected_project, projects):
             st.rerun()
 
 
+@st.fragment
+@authenticated_callback
 def render_experiment_list(
     selected_project,
-    chats,
-    project_messages,
     search_across_project: str,
 ):
+    chats, project_messages, _ = cached_read(
+        get_project_workspace,
+        selected_project["id"],
+    )
     render_html('<div class="experiments-list-scope"></div>')
     heading_col, action_col = st.columns([1, 0.48], gap="small")
 
@@ -556,7 +560,11 @@ def render_experiment_list(
         )
 
 
-def render_notes_tab(selected_chat, messages, audio_records):
+@st.fragment
+@authenticated_callback
+def render_notes_tab(selected_chat):
+    messages = cached_read(get_messages, selected_chat["id"])
+    audio_records = cached_read(get_audio_records, selected_chat["id"])
     st.caption("Capture written observations and local audio transcriptions.")
 
     with st.container(height=380, border=True):
@@ -601,7 +609,7 @@ def render_notes_tab(selected_chat, messages, audio_records):
                                 )
 
                             st.success("Observation updated.")
-                            st.rerun()
+                            st.rerun(scope="fragment")
 
                 confirm_delete = st.checkbox(
                     "Confirm deletion",
@@ -625,7 +633,7 @@ def render_notes_tab(selected_chat, messages, audio_records):
 
                     delete_message(message["id"])
                     st.success("Observation deleted.")
-                    st.rerun()
+                    st.rerun(scope="fragment")
 
     with st.form("add_experiment_note", clear_on_submit=True):
         note = st.text_area(
@@ -648,7 +656,7 @@ def render_notes_tab(selected_chat, messages, audio_records):
                     content=note.strip(),
                 )
                 st.success("Note saved.")
-                st.rerun()
+                st.rerun(scope="fragment")
 
     with st.container(border=True):
         render_html(
@@ -697,7 +705,7 @@ def render_notes_tab(selected_chat, messages, audio_records):
                         transcript=transcript,
                     )
                     st.success("Audio saved and added to Notes.")
-                    st.rerun()
+                    st.rerun(scope="fragment")
                 except (ValueError, RuntimeError, OSError) as exc:
                     if audio_path:
                         delete_audio_file(audio_path)
@@ -720,7 +728,14 @@ def render_notes_tab(selected_chat, messages, audio_records):
                     st.caption("Înregistrarea audio nu mai este disponibilă.")
 
 
-def render_ai_chat_panel(selected_project, selected_chat, messages, ai_messages):
+@st.fragment
+@authenticated_callback
+def render_ai_chat_panel(selected_project, selected_chat):
+    messages = cached_read(get_messages, selected_chat["id"])
+    ai_messages = cached_read(
+        get_experiment_ai_messages,
+        selected_chat["id"],
+    )
     st.caption("Ask AI questions grounded only in this experiment's notes.")
 
     with st.container(height=520, border=True):
@@ -777,14 +792,14 @@ def render_ai_chat_panel(selected_project, selected_chat, messages, ai_messages)
                     "assistant",
                     answer,
                 )
-                st.rerun()
+                st.rerun(scope="fragment")
 
     if ai_messages and st.button(
         "Clear AI conversation",
         width="stretch",
     ):
         clear_experiment_ai_messages(selected_chat["id"])
-        st.rerun()
+        st.rerun(scope="fragment")
 
 
 def render_experiment_settings(selected_chat, all_chats):
@@ -1627,8 +1642,6 @@ def render_workspace_tab_content(
     with list_col:
         render_experiment_list(
             selected_project=selected_project,
-            chats=chats,
-            project_messages=project_messages,
             search_across_project=search_across_project,
         )
 
@@ -1654,13 +1667,6 @@ def render_workspace_tab_content(
             )
         return
 
-    messages = cached_read(get_messages, selected_chat["id"])
-    audio_records = cached_read(get_audio_records, selected_chat["id"])
-    ai_messages = cached_read(
-        get_experiment_ai_messages,
-        selected_chat["id"],
-    )
-
     with content_col:
         render_html('<div class="experiment-content-scope"></div>')
         title_col, settings_col = st.columns([1, 0.15], gap="small")
@@ -1679,7 +1685,7 @@ def render_workspace_tab_content(
                 render_experiment_settings(selected_chat, chats)
 
         st.markdown("#### Notes")
-        render_notes_tab(selected_chat, messages, audio_records)
+        render_notes_tab(selected_chat)
 
     with chat_col:
         render_html('<div class="experiment-ai-chat-scope"></div>')
@@ -1689,12 +1695,7 @@ def render_workspace_tab_content(
             <div class="panel-subtitle">Always connected to {safe_html(selected_chat['title'])}</div>
             """
         )
-        render_ai_chat_panel(
-            selected_project,
-            selected_chat,
-            messages,
-            ai_messages,
-        )
+        render_ai_chat_panel(selected_project, selected_chat)
 
 
 def render_insights_tab_content(

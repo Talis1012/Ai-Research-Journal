@@ -465,14 +465,18 @@ def update_manuscript_section(
     title: str | None = None,
     content_md: str | None = None,
 ):
-    section = get_manuscript_section(section_id)
+    conn = get_connection()
+    section = conn.execute(
+        "SELECT * FROM manuscript_sections WHERE id = ?",
+        (section_id,),
+    ).fetchone()
 
     if not section:
+        conn.close()
         raise ValueError("The section no longer exists.")
 
     new_title = section["title"] if title is None else _require_text(title, "Section title")
     new_content = section["content_md"] if content_md is None else str(content_md)
-    conn = get_connection()
 
     with conn:
         conn.execute(
@@ -487,7 +491,13 @@ def update_manuscript_section(
             "UPDATE manuscripts SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
             (section["manuscript_id"],),
         )
-        _sync_section_citations(conn, section_id, section["manuscript_id"], new_content)
+        if content_md is not None:
+            _sync_section_citations(
+                conn,
+                section_id,
+                section["manuscript_id"],
+                new_content,
+            )
 
     conn.close()
 
@@ -1201,34 +1211,45 @@ def _sync_section_citations(conn, section_id: int, manuscript_id: int, content: 
     }
     conn.execute("DELETE FROM manuscript_citations WHERE section_id = ?", (section_id,))
 
-    for key in keys:
-        source = conn.execute(
-            """
-            SELECT library_item_id, citation_key
-            FROM manuscript_sources
-            WHERE manuscript_id = ? AND citation_key = ? COLLATE NOCASE
-            """,
-            (manuscript_id, key),
-        ).fetchone()
+    if not keys:
+        return
 
-        if source:
-            conn.execute(
-                """
-                INSERT INTO manuscript_citations (
-                    manuscript_id,
-                    section_id,
-                    library_item_id,
-                    citation_key
-                )
-                VALUES (?, ?, ?, ?)
-                """,
-                (
-                    manuscript_id,
-                    section_id,
-                    source["library_item_id"],
-                    source["citation_key"],
-                ),
+    sources = conn.execute(
+        """
+        SELECT library_item_id, citation_key
+        FROM manuscript_sources
+        WHERE manuscript_id = ?
+        """,
+        (manuscript_id,),
+    ).fetchall()
+    sources_by_key = {
+        str(source["citation_key"]).casefold(): source
+        for source in sources
+    }
+    citations = [
+        (
+            manuscript_id,
+            section_id,
+            source["library_item_id"],
+            source["citation_key"],
+        )
+        for key in sorted(keys, key=str.casefold)
+        if (source := sources_by_key.get(key.casefold())) is not None
+    ]
+
+    if citations:
+        conn.executemany(
+            """
+            INSERT INTO manuscript_citations (
+                manuscript_id,
+                section_id,
+                library_item_id,
+                citation_key
             )
+            VALUES (?, ?, ?, ?)
+            """,
+            citations,
+        )
 
 
 def validate_section_citations(content: str, sources) -> dict:

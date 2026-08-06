@@ -1209,6 +1209,8 @@ def _render_manuscript_objects(manuscript, section, sections, assets, current_co
             _render_add_manuscript_object(manuscript, section)
 
 
+@st.fragment
+@authenticated_callback
 def _render_editor(manuscript, section, sections, sources, assets):
     render_html('<div class="writing-editor-scope"></div>')
 
@@ -1373,7 +1375,7 @@ def _render_ai_context_selector(manuscript, section, sections, sources, evidence
                 evidence_keys=st.session_state.get(evidence_key, settings["evidence_keys"]),
             )
             st.toast("AI context saved.")
-            st.rerun()
+            st.rerun(scope="fragment")
 
     settings, context_sections, context_sources, context_evidence = _resolve_ai_context(
         manuscript["id"],
@@ -1391,7 +1393,18 @@ def _render_ai_context_selector(manuscript, section, sections, sources, evidence
     return settings, context_sections, context_sources, context_evidence
 
 
-def _render_ai_assistant(manuscript, section, sections, sources, evidence):
+@st.fragment
+@authenticated_callback
+def _render_ai_assistant(manuscript_id: int, section_id: int | None):
+    workspace = cached_read(get_manuscript_workspace, manuscript_id)
+    manuscript = workspace["manuscript"]
+    sections = workspace["sections"]
+    sources = workspace["sources"]
+    evidence = cached_read(get_manuscript_evidence, manuscript_id)
+    section = next(
+        (row for row in sections if row["id"] == section_id),
+        None,
+    )
     render_html('<div class="writing-assistant-scope"></div>')
     render_html(
         '<div class="writing-panel-title">✦ AI Writing Assistant</div>'
@@ -1475,7 +1488,7 @@ def _render_ai_assistant(manuscript, section, sections, sources, evidence):
             st.session_state["writing_ai_suggestion"] = result
             st.session_state["writing_ai_suggestion_section_id"] = section["id"]
             st.session_state["writing_ai_suggestion_mode"] = mode
-            st.rerun()
+            st.rerun(scope="fragment")
         except Exception as exc:
             st.error(str(exc))
 
@@ -1628,12 +1641,12 @@ def _render_ai_assistant(manuscript, section, sections, sources, evidence):
             width="stretch",
         ):
             _clear_ai_suggestion()
-            st.rerun()
+            st.rerun(scope="fragment")
 
     if messages and st.button("Clear AI conversation", width="stretch"):
         clear_manuscript_ai_messages(manuscript["id"])
         _clear_ai_suggestion()
-        st.rerun()
+        st.rerun(scope="fragment")
 
 
 def _apply_submission_template_defaults(manuscript_id: int):
@@ -1940,7 +1953,6 @@ def _render_publication_panel(manuscript, sections, sources, assets, profile, ch
 
 
 def _render_manuscript_tab(manuscript, sections, sources, assets, profile):
-    evidence = cached_read(get_manuscript_evidence, manuscript["id"])
     section_ids = [section["id"] for section in sections]
 
     if st.session_state.get("writing_section_id") not in section_ids:
@@ -1963,7 +1975,10 @@ def _render_manuscript_tab(manuscript, sections, sources, assets, profile):
         _render_editor(manuscript, section, sections, sources, assets)
 
     with assistant_col:
-        _render_ai_assistant(manuscript, section, sections, sources, evidence)
+        _render_ai_assistant(
+            manuscript["id"],
+            section["id"] if section else None,
+        )
 
     checks = _render_manuscript_checks(manuscript, sections, sources, profile)
     _render_publication_panel(

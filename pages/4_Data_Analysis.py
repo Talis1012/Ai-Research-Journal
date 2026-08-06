@@ -1279,8 +1279,6 @@ def render_history():
         )
         return
 
-    selected_id = st.session_state.get("analysis_history_selected_id")
-
     for run in runs:
         with st.container(border=True, key=f"analysis_history_card_{run['id']}"):
             info_col, metrics_col, action_col = st.columns([2.2, 1.2, 0.55], gap="small", vertical_alignment="center")
@@ -1308,7 +1306,8 @@ def render_history():
             with action_col:
                 if st.button("Open", key=f"open_analysis_run_{run['id']}", width="stretch"):
                     st.session_state["analysis_history_selected_id"] = run["id"]
-                    st.rerun()
+
+    selected_id = st.session_state.get("analysis_history_selected_id")
 
     if selected_id:
         selected = cached_read(get_analysis_run, int(selected_id))

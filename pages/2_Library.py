@@ -992,6 +992,8 @@ def render_item_row(item):
                 st.rerun()
 
 
+@st.fragment
+@authenticated_callback
 def render_library_list(folders, projects, paths):
     render_html('<div class="library-list-scope"></div>')
     heading_col, count_col = st.columns([1, 0.36], gap="small")
@@ -1145,7 +1147,7 @@ def render_library_list(folders, projects, paths):
                 width="stretch",
             ):
                 st.session_state["library_page_number"] = page_number - 1
-                st.rerun()
+                st.rerun(scope="fragment")
 
         with page_col:
             st.caption(f"Page {page_number} of {total_pages}")
@@ -1158,7 +1160,7 @@ def render_library_list(folders, projects, paths):
                 width="stretch",
             ):
                 st.session_state["library_page_number"] = page_number + 1
-                st.rerun()
+                st.rerun(scope="fragment")
 
 
 @st.fragment
@@ -2347,6 +2349,8 @@ def _submit_discovery_question(question: str, projects):
     })
 
 
+@st.fragment
+@authenticated_callback
 def _render_discovery_chat(projects):
     render_html('<div class="discover-chat-scope"></div>')
     render_html(
@@ -2414,7 +2418,7 @@ def _render_discovery_chat(projects):
                     ):
                         with st.spinner("AI is reviewing the discovery context..."):
                             _submit_discovery_question(prompt, projects)
-                        st.rerun()
+                        st.rerun(scope="fragment")
 
     history = st.session_state.setdefault("discover_chat_history", [])
 
@@ -2450,7 +2454,7 @@ def _render_discovery_chat(projects):
         else:
             with st.spinner("AI is reviewing the discovery context..."):
                 _submit_discovery_question(question, projects)
-            st.rerun()
+            st.rerun(scope="fragment")
 
     if history and st.button(
         "Clear conversation",
@@ -2458,7 +2462,7 @@ def _render_discovery_chat(projects):
         width="stretch",
     ):
         st.session_state["discover_chat_history"] = []
-        st.rerun()
+        st.rerun(scope="fragment")
 
 
 render_page_css()
