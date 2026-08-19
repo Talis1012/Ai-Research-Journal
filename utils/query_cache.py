@@ -56,6 +56,12 @@ _READER_TABLES: dict[str, tuple[str, ...]] = {
     ),
     "get_library_stats": ("library_items", "library_folders"),
     "get_library_external_keys": ("library_items",),
+    "get_research_case": ("research_cases", "library_items"),
+    "get_project_research_cases": (
+        "research_cases",
+        "library_items",
+        "library_item_projects",
+    ),
     "get_project_discovery_results": (
         "project_discovery_sets",
         "project_discovery_set_papers",

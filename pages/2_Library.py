@@ -2,6 +2,7 @@ import math
 from datetime import datetime
 
 import streamlit as st
+from streamlit_agraph import agraph, Config, Edge, Node
 
 from db.database import DatabaseIntegrityError, init_db_once
 from db.discovery_queries import (
@@ -29,12 +30,24 @@ from db.library_queries import (
     rename_library_folder,
     update_library_item,
 )
+from db.research_case_queries import (
+    get_project_research_cases,
+    get_research_case,
+)
 from db.queries import get_project_ideas, get_project_messages, get_projects
 from services.library_service import (
     delete_library_file,
     read_library_file,
     save_library_upload,
     validate_library_upload_batch,
+)
+from services.research_case_service import (
+    generate_project_research_cases,
+    generate_research_case_for_item,
+    get_research_case_coverage,
+    is_research_case_current,
+    recommend_relevant_experiments,
+    research_case_to_mindmap,
 )
 from utils.auth import authenticated_callback, require_auth
 from utils.content_safety import safe_external_url, sanitize_untrusted_markdown
@@ -46,6 +59,7 @@ from utils.ui import (
     load_css,
     render_html,
     render_untrusted_caption,
+    render_untrusted_markdown,
     safe_html,
     sidebar_nav,
     top_brand,
@@ -460,6 +474,55 @@ def render_page_css():
             padding: 11px 12px;
             font-size: 0.76rem;
             line-height: 1.58;
+        }
+
+        .recommendations-hero {
+            border: 1px solid #cfe0f7;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #f5f9ff 0%, #fbfdff 100%);
+            padding: 16px 18px;
+            margin-bottom: 4px;
+        }
+
+        .recommendations-hero-title {
+            color: #101828;
+            font-size: 1.05rem;
+            font-weight: 860;
+        }
+
+        .recommendations-hero-caption {
+            color: #667085;
+            font-size: 0.78rem;
+            line-height: 1.5;
+            margin-top: 4px;
+        }
+
+        .recommendation-baseline-note {
+            border-left: 3px solid #7d4ad8;
+            border-radius: 0 8px 8px 0;
+            background: #faf8ff;
+            color: #475467;
+            font-size: 0.76rem;
+            line-height: 1.5;
+            padding: 10px 12px;
+        }
+
+        .recommendation-template-title {
+            color: #101828;
+            font-size: 1rem;
+            font-weight: 850;
+            line-height: 1.35;
+        }
+
+        .recommendation-template-meta {
+            color: #667085;
+            font-size: 0.72rem;
+            margin-top: 4px;
+        }
+
+        div[class*="st-key-experiment_recommendation_card_"] {
+            border-color: #dfe6ef !important;
+            box-shadow: 0 4px 12px rgba(16, 24, 40, 0.035);
         }
 
         div[class*="st-key-discover_result_"] {
@@ -1323,6 +1386,67 @@ def render_details_panel(folders, projects, paths):
             st.error("A different paper with this DOI is already in My Library.")
         except Exception as exc:
             st.error(str(exc))
+
+    if item["item_type"] in {"paper", "pdf"}:
+        st.divider()
+        st.markdown("**Research Case**")
+
+        if not item_project_ids:
+            st.caption(
+                "Link this paper to a project before generating its semantic Research Case."
+            )
+        else:
+            case_project_id = st.selectbox(
+                "Project for this Research Case",
+                item_project_ids,
+                key=f"research_case_project_{item['id']}",
+                format_func=lambda value: projects_by_id[value]["name"],
+            )
+            research_case = cached_read(
+                get_research_case,
+                case_project_id,
+                int(item["id"]),
+            )
+
+            if research_case and is_research_case_current(research_case, item):
+                experiment_count = len(
+                    research_case.get("semantic", {}).get(
+                        "experimental_strategy",
+                        [],
+                    )
+                )
+                st.success(
+                    f"Research Case ready · {experiment_count} experiment(s) extracted."
+                )
+            elif research_case and research_case.get("status") == "failed":
+                st.warning(
+                    "The last generation failed: "
+                    + str(research_case.get("error_message") or "Unknown error")
+                )
+            elif research_case:
+                st.info("The Research Case is outdated and should be regenerated.")
+            else:
+                st.caption("No Research Case has been generated for this project yet.")
+
+            if st.button(
+                "Generate / update Research Case",
+                key=f"generate_research_case_{item['id']}_{case_project_id}",
+                width="stretch",
+            ):
+                try:
+                    with st.spinner("Extracting the semantic Research Case..."):
+                        generate_research_case_for_item(
+                            case_project_id,
+                            int(item["id"]),
+                        )
+                    st.session_state.pop(
+                        f"experiment_recommendation_result_{case_project_id}",
+                        None,
+                    )
+                    st.toast("Research Case generated.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
 
     st.divider()
     confirm_delete = st.checkbox(
@@ -2465,6 +2589,419 @@ def _render_discovery_chat(projects):
         st.rerun(scope="fragment")
 
 
+def _research_case_source_url(example: dict) -> str:
+    article_url = safe_external_url(example.get("url"))
+
+    if article_url:
+        return article_url
+
+    doi = str(example.get("doi") or "").strip()
+
+    if doi:
+        return safe_external_url(f"https://doi.org/{doi}")
+
+    return ""
+
+
+def _render_recommendation_example(example: dict, index: int):
+    experiment = example.get("experiment", {})
+    title = str(example.get("article_title") or "Untitled article")
+    year = example.get("publication_year")
+    expander_label = (
+        f"{index}. {title}"
+        + (f" ({year})" if year else "")
+        + f" · similarity {example.get('similarity_score', 0):.1f}%"
+    )
+
+    with st.expander(expander_label):
+        metadata_parts = [
+            f"Retrieval rank #{example.get('top_k_rank', '—')}",
+            f"Source: {str(example.get('source_quality') or 'unknown').replace('_', ' ')}",
+        ]
+
+        if example.get("article_authors"):
+            metadata_parts.append(str(example["article_authors"]))
+
+        render_untrusted_caption(" · ".join(metadata_parts))
+        source_url = _research_case_source_url(example)
+
+        if source_url:
+            st.link_button("Open source article", source_url)
+
+        detail_rows = (
+            ("Goal", experiment.get("goal")),
+            ("Changed variable", experiment.get("changed_variable")),
+            (
+                "Controlled variables",
+                ", ".join(experiment.get("controlled_variables", [])),
+            ),
+            ("Evaluation", experiment.get("evaluation_metric")),
+            ("Purpose", experiment.get("motivation")),
+            ("Concrete example", experiment.get("concrete_example")),
+        )
+
+        for label, value in detail_rows:
+            if value:
+                st.markdown(f"**{label}**")
+                render_untrusted_markdown(value)
+
+        evidence = experiment.get("evidence", {})
+
+        if evidence.get("excerpt"):
+            evidence_location = " · ".join(
+                part
+                for part in (
+                    str(evidence.get("section") or ""),
+                    f"page {evidence['page']}" if evidence.get("page") else "",
+                )
+                if part
+            )
+            st.markdown("**Source evidence**")
+
+            if evidence_location:
+                render_untrusted_caption(evidence_location)
+
+            render_untrusted_markdown(evidence["excerpt"])
+
+
+def _render_experiment_recommendation_results(result: dict):
+    recommendations = result.get("recommendations", [])
+    st.markdown("### Experiments from similar research")
+    render_html(
+        """
+        <div class="recommendation-baseline-note">
+            Literature retrieval baseline: these are experiments reported in
+            similar Research Cases. The system is not generating a new experiment
+            or claiming that a retrieved experiment is scientifically appropriate.
+        </div>
+        """
+    )
+    st.caption(
+        f"Retrieved {result.get('retrieved_case_count', 0)} of "
+        f"{result.get('available_case_count', 0)} current Research Cases · "
+        f"top-k = {result.get('top_k', 0)}"
+    )
+
+    if not recommendations:
+        st.info(
+            "The closest Research Cases do not contain source-supported experimental "
+            "strategies yet. Add full-text papers or richer abstracts and update the cases."
+        )
+        return
+
+    for index, recommendation in enumerate(recommendations, start=1):
+        with st.container(
+            border=True,
+            key=f"experiment_recommendation_card_{index}_{recommendation['template_type']}",
+        ):
+            title_col, frequency_col, similarity_col = st.columns(
+                [3.2, 0.85, 0.85],
+                gap="small",
+            )
+
+            with title_col:
+                render_html(
+                    f"""
+                    <div class="recommendation-template-title">
+                        {index}. {safe_html(recommendation['template_label'])}
+                    </div>
+                    <div class="recommendation-template-meta">
+                        {safe_html(recommendation['template_description'])}
+                    </div>
+                    """
+                )
+
+            with frequency_col:
+                st.metric(
+                    "Articles",
+                    recommendation["template_frequency"],
+                    help="Unique retrieved articles that contain this template.",
+                )
+
+            with similarity_col:
+                st.metric(
+                    "Best match",
+                    f"{recommendation['best_similarity_score']:.1f}%",
+                    help="Highest semantic similarity among supporting articles.",
+                )
+
+            representative = recommendation.get("representative", {})
+
+            if representative.get("goal"):
+                st.markdown("**Representative goal**")
+                render_untrusted_markdown(representative["goal"])
+
+            st.caption(
+                f"Best retrieval rank: #{recommendation['best_top_k_rank']} · "
+                "frequency is descriptive literature support, not evidence of quality."
+            )
+
+            for example_index, example in enumerate(
+                recommendation.get("examples", []),
+                start=1,
+            ):
+                _render_recommendation_example(example, example_index)
+
+
+def _render_research_case_mindmap(case: dict):
+    mindmap = research_case_to_mindmap(case.get("semantic", {}))
+    prefix = f"research_case_{case['id']}_"
+    node_sizes = {"high": 34, "medium": 27, "low": 22}
+    node_colors = {"high": "#1769d2", "medium": "#6aa8ee", "low": "#8e62cf"}
+    graph_nodes = [
+        Node(
+            id=prefix + node["id"],
+            label=node["label"],
+            title="Extracted semantic concept",
+            size=node_sizes.get(node.get("importance", "medium"), 27),
+            color=node_colors.get(node.get("importance", "medium"), "#6aa8ee"),
+            font={
+                "size": 16,
+                "face": "Inter",
+                "color": "#111827",
+                "strokeWidth": 3,
+                "strokeColor": "#ffffff",
+            },
+        )
+        for node in mindmap["nodes"]
+    ]
+    graph_edges = [
+        Edge(
+            source=prefix + edge["source"],
+            target=prefix + edge["target"],
+        )
+        for edge in mindmap["edges"]
+    ]
+    agraph(
+        nodes=graph_nodes,
+        edges=graph_edges,
+        config=Config(
+            width=980,
+            height=420,
+            directed=True,
+            physics=True,
+            hierarchical=False,
+            groups={},
+        ),
+    )
+    st.caption(
+        f"{len(graph_nodes)} nodes · {len(graph_edges)} connections · "
+        "visualization derived from the saved semantic JSON"
+    )
+
+
+def _render_research_case_library(project_id: int, cases: list[dict]):
+    st.divider()
+    st.markdown("### Research Case Library")
+    st.caption(
+        "Project-scoped semantic cases. The mind map is derived for visualization; "
+        "the standardized JSON remains the source of truth."
+    )
+    ready_cases = [case for case in cases if case.get("status") == "ready"]
+
+    if not cases:
+        st.info("No Research Cases have been generated for this project.")
+        return
+
+    status_rows = []
+
+    for case in cases:
+        experiment_count = len(
+            case.get("semantic", {}).get("experimental_strategy", [])
+        )
+        status_rows.append({
+            "Article": case.get("article_title") or "Untitled article",
+            "Status": case.get("status", "unknown"),
+            "Experiments": experiment_count,
+            "Updated": compact_date(case.get("updated_at")),
+        })
+
+    st.dataframe(status_rows, hide_index=True, width="stretch")
+
+    if not ready_cases:
+        st.warning("No ready Research Case is available to inspect.")
+        return
+
+    cases_by_id = {int(case["id"]): case for case in ready_cases}
+    selected_case_id = st.selectbox(
+        "Inspect Research Case",
+        list(cases_by_id),
+        key=f"inspect_research_case_{project_id}",
+        format_func=lambda value: cases_by_id[value]["article_title"],
+    )
+    selected_case = cases_by_id[selected_case_id]
+    semantic = selected_case.get("semantic", {})
+    source_quality = semantic.get("metadata", {}).get("source_quality", "unknown")
+    st.caption(
+        f"Source quality: {source_quality.replace('_', ' ')} · "
+        f"schema {selected_case.get('schema_version', '—')} · "
+        f"model {selected_case.get('generation_model', '—')}"
+    )
+    _render_research_case_mindmap(selected_case)
+
+    with st.expander("View saved semantic JSON"):
+        st.json(semantic, expanded=False)
+
+    if selected_case.get("error_message"):
+        render_untrusted_caption(selected_case["error_message"])
+
+
+def render_experiment_recommendations(projects):
+    render_html(
+        """
+        <div class="recommendations-hero">
+            <div class="recommendations-hero-title">Experiment Recommendations</div>
+            <div class="recommendations-hero-caption">
+                Build project-specific Research Cases and retrieve experimental
+                strategies from the most semantically similar literature.
+            </div>
+        </div>
+        """
+    )
+
+    if not projects:
+        st.info("Create a research project before building Research Cases.")
+        return
+
+    project_ids = [int(project["id"]) for project in projects]
+    projects_by_id = {int(project["id"]): project for project in projects}
+    preferred_project_id = st.session_state.get("experiment_recommendations_project_id")
+
+    if preferred_project_id not in project_ids:
+        discovery_project_id = st.session_state.get("discover_project_id")
+        preferred_project_id = (
+            discovery_project_id
+            if discovery_project_id in project_ids
+            else project_ids[0]
+        )
+
+    project_id = st.selectbox(
+        "Project",
+        project_ids,
+        index=project_ids.index(preferred_project_id),
+        key="experiment_recommendations_project_id",
+        format_func=lambda value: projects_by_id[value]["name"],
+        help="Research Cases and recommendations are isolated to this project.",
+    )
+    project_items = cached_read(
+        get_library_items,
+        project_id=project_id,
+        item_types=("paper", "pdf"),
+        sort="newest",
+        limit=500,
+    )
+    cases = cached_read(get_project_research_cases, project_id)
+    coverage = get_research_case_coverage(project_items, cases)
+    eligible_col, ready_col, update_col, failed_col = st.columns(4, gap="small")
+
+    with eligible_col:
+        st.metric("Linked papers", coverage["eligible"])
+
+    with ready_col:
+        st.metric("Ready cases", coverage["ready"])
+
+    with update_col:
+        st.metric("To process", coverage["to_process"])
+
+    with failed_col:
+        st.metric("Failed", coverage["failed"])
+
+    action_col, retrieve_col, top_k_col = st.columns([1.35, 1.35, 0.75], gap="small")
+
+    with top_k_col:
+        top_k = st.number_input(
+            "Top-k papers",
+            min_value=1,
+            max_value=30,
+            value=min(8, max(1, coverage["ready"])),
+            step=1,
+            disabled=coverage["ready"] == 0,
+            key=f"experiment_recommendations_top_k_{project_id}",
+        )
+
+    with action_col:
+        st.write("")
+
+        if st.button(
+            "Generate / update Research Cases",
+            key=f"generate_project_research_cases_{project_id}",
+            disabled=coverage["eligible"] == 0 or coverage["to_process"] == 0,
+            width="stretch",
+            help="Processes missing, failed, or outdated paper cases in a bounded batch.",
+        ):
+            try:
+                with st.spinner("Generating project Research Cases..."):
+                    report = generate_project_research_cases(project_id)
+                st.session_state[f"research_case_batch_report_{project_id}"] = report
+                st.session_state.pop(
+                    f"experiment_recommendation_result_{project_id}",
+                    None,
+                )
+                st.toast(
+                    f"Generated {len(report['generated'])} Research Case(s)."
+                )
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
+
+    with retrieve_col:
+        st.write("")
+
+        if st.button(
+            "Find relevant experiments",
+            key=f"recommend_relevant_experiments_{project_id}",
+            disabled=coverage["ready"] == 0,
+            type="primary",
+            width="stretch",
+            help="Retrieves literature precedents; it does not generate a new experiment.",
+        ):
+            try:
+                with st.spinner("Matching the project to similar Research Cases..."):
+                    result = recommend_relevant_experiments(
+                        project_id,
+                        top_k=int(top_k),
+                    )
+                st.session_state[
+                    f"experiment_recommendation_result_{project_id}"
+                ] = result
+            except Exception as exc:
+                st.error(str(exc))
+
+    if coverage["eligible"] == 0:
+        st.info(
+            "Link papers or PDFs from My Library to this project before generating cases."
+        )
+    elif coverage["ready"] < coverage["eligible"]:
+        st.caption(
+            f"Coverage: {coverage['ready']} of {coverage['eligible']} linked papers "
+            "have a current Research Case."
+        )
+
+    report = st.session_state.get(f"research_case_batch_report_{project_id}")
+
+    if report and report.get("failures"):
+        with st.expander(
+            f"{len(report['failures'])} paper(s) could not be processed",
+            expanded=True,
+        ):
+            for failure in report["failures"]:
+                render_untrusted_caption(
+                    f"{failure['title']}: {failure['error']}"
+                )
+
+    result = st.session_state.get(f"experiment_recommendation_result_{project_id}")
+
+    if result:
+        _render_experiment_recommendation_results(result)
+    else:
+        st.info(
+            "Generate the Research Cases, then retrieve experiments reported in "
+            "the most similar articles."
+        )
+
+    _render_research_case_library(project_id, cases)
+
+
 render_page_css()
 st.session_state.setdefault("library_collection", "all")
 st.session_state.setdefault("library_page_number", 1)
@@ -2520,8 +3057,8 @@ with page_col:
     with action_col:
         render_add_controls(folders, projects, paths)
 
-    my_library_tab, discover_tab = st.tabs(
-        ["My Library", "Discover papers"],
+    my_library_tab, discover_tab, recommendations_tab = st.tabs(
+        ["My Library", "Discover papers", "Experiment Recommendations"],
         key="library_primary_tab",
         on_change="rerun",
     )
@@ -2556,3 +3093,7 @@ with page_col:
 
             with discover_chat_col:
                 _render_discovery_chat(projects)
+
+    if recommendations_tab.open:
+        with recommendations_tab:
+            render_experiment_recommendations(projects)

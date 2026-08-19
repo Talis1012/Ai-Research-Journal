@@ -10,6 +10,7 @@ streamlit-agraph
 requests
 python-docx
 reportlab
+pypdf>=5,<7
 Pillow
 matplotlib
 pandas>=2.2,<4

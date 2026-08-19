@@ -6,6 +6,12 @@ redactarea lucrărilor asistată de AI. Pagina Data Analysis poate importa
 dataseturi CSV, TSV, XLSX și JSON, rula fluxuri scikit-learn reproductibile și
 exporta predicțiile și raportul fiecărei analize.
 
+Library include și fluxul **Experiment Recommendations**: articolele asociate
+unui proiect sunt transformate în Research Cases standardizate, cu trasabilitate
+și embedding-uri persistente. Baseline-ul recuperează strategiile experimentale
+din cazurile similare, le grupează într-o taxonomie independentă de domeniu și
+afișează exemplele din literatură; nu generează un experiment nou.
+
 ## Arhitectură cloud
 
 În Streamlit, aplicația folosește:

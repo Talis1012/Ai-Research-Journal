@@ -644,12 +644,24 @@ def _replace_library_item_tags(conn, item_id: int, tag_names: list[str]):
 
 
 def _replace_library_item_projects(conn, item_id: int, project_ids: list[int]):
-    conn.execute(
-        "DELETE FROM library_item_projects WHERE item_id = ?",
+    normalized_project_ids = sorted(set(int(project_id) for project_id in project_ids))
+    existing_rows = conn.execute(
+        "SELECT project_id FROM library_item_projects WHERE item_id = ?",
         (item_id,),
-    )
+    ).fetchall()
+    existing_project_ids = {int(row["project_id"]) for row in existing_rows}
+    requested_project_ids = set(normalized_project_ids)
 
-    for project_id in sorted(set(project_ids)):
+    for project_id in sorted(existing_project_ids - requested_project_ids):
+        conn.execute(
+            """
+            DELETE FROM library_item_projects
+            WHERE item_id = ? AND project_id = ?
+            """,
+            (item_id, project_id),
+        )
+
+    for project_id in sorted(requested_project_ids - existing_project_ids):
         conn.execute(
             """
             INSERT OR IGNORE INTO library_item_projects (item_id, project_id)

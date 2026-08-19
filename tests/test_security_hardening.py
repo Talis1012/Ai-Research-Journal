@@ -3,6 +3,7 @@ import os
 import tempfile
 import unittest
 import wave
+from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import patch
 from unittest.mock import Mock
@@ -244,6 +245,33 @@ class SecurityHardeningTestCase(unittest.TestCase):
         config = provider.client.models.generate_content.call_args.kwargs["config"]
         self.assertIn("untrusted data", str(config.system_instruction).lower())
         self.assertEqual(config.max_output_tokens, 4096)
+
+    def test_gemini_embedding_uses_retrieval_task_and_bounded_dimensions(self):
+        provider = GeminiProvider.__new__(GeminiProvider)
+        provider.embedding_model = "test-embedding-model"
+        provider.client = Mock()
+        provider.client.models.embed_content.return_value = Mock(
+            embeddings=[Mock(values=[0.25, 0.75])]
+        )
+
+        with (
+            patch("ai.gemini_provider.consume_rate_limit") as consume,
+            patch(
+                "ai.gemini_provider.concurrency_slot",
+                return_value=nullcontext(),
+            ),
+        ):
+            embedding = provider.generate_embedding(
+                "bounded research context",
+                task_type="RETRIEVAL_QUERY",
+            )
+
+        self.assertEqual(embedding, [0.25, 0.75])
+        consume.assert_called_once()
+        call = provider.client.models.embed_content.call_args
+        self.assertEqual(call.kwargs["model"], "test-embedding-model")
+        self.assertEqual(call.kwargs["config"].task_type, "RETRIEVAL_QUERY")
+        self.assertEqual(call.kwargs["config"].output_dimensionality, 768)
 
     def test_audio_header_duration_and_format_are_validated(self):
         valid = wav_bytes(seconds=0.25)

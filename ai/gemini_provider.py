@@ -31,6 +31,10 @@ class GeminiProvider(AIProvider):
             raise ValueError("Trebuie să setezi GEMINI_API_KEY în fișierul .env")
 
         self.model = model or os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+        self.embedding_model = os.getenv(
+            "GEMINI_EMBEDDING_MODEL",
+            "gemini-embedding-001",
+        ).strip()
         self.fallback_model = os.getenv(
             "GEMINI_FALLBACK_MODEL",
             "gemini-3.1-flash-lite",
@@ -168,3 +172,70 @@ class GeminiProvider(AIProvider):
             return json.loads(response.text)
         except json.JSONDecodeError as exc:
             raise ValueError("Gemini nu a returnat JSON valid.") from exc
+
+    def generate_embedding(
+        self,
+        text: str,
+        *,
+        task_type: str = "RETRIEVAL_DOCUMENT",
+    ) -> list[float]:
+        normalized_text = str(text or "").strip()
+
+        if not normalized_text:
+            raise ValueError("The embedding input cannot be empty.")
+
+        max_chars = env_int(
+            "MAX_EMBEDDING_INPUT_CHARS",
+            40_000,
+            maximum=120_000,
+        )
+
+        if len(normalized_text) > max_chars:
+            normalized_text = normalized_text[:max_chars]
+
+        consume_rate_limit(
+            "Gemini embeddings",
+            per_user_hour=env_int(
+                "EMBEDDING_REQUESTS_PER_USER_HOUR",
+                100,
+                maximum=5000,
+            ),
+            per_user_day=env_int(
+                "EMBEDDING_REQUESTS_PER_USER_DAY",
+                500,
+                maximum=20000,
+            ),
+            global_per_minute=env_int(
+                "EMBEDDING_GLOBAL_REQUESTS_PER_MINUTE",
+                120,
+                maximum=10000,
+            ),
+            global_per_day=env_int(
+                "EMBEDDING_GLOBAL_REQUESTS_PER_DAY",
+                5000,
+                maximum=100000,
+            ),
+        )
+
+        with concurrency_slot(
+            "Gemini embeddings",
+            global_limit=env_int(
+                "EMBEDDING_MAX_CONCURRENT_REQUESTS",
+                8,
+                maximum=100,
+            ),
+            lease_seconds=300,
+        ):
+            response = self.client.models.embed_content(
+                model=self.embedding_model,
+                contents=normalized_text,
+                config=types.EmbedContentConfig(
+                    task_type=str(task_type or "RETRIEVAL_DOCUMENT"),
+                    output_dimensionality=768,
+                ),
+            )
+
+        if not response.embeddings or not response.embeddings[0].values:
+            raise ValueError("Gemini did not return an embedding.")
+
+        return [float(value) for value in response.embeddings[0].values]

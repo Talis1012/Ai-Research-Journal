@@ -53,6 +53,7 @@ _IDENTITY_TABLES = {
     "library_folders",
     "library_items",
     "library_tags",
+    "research_cases",
     "analysis_runs",
     "project_discovery_set_papers",
     "manuscripts",
@@ -921,6 +922,65 @@ def init_db():
             REFERENCES projects(id)
             ON DELETE CASCADE
         )
+    """)
+
+    # =========================
+    # PROJECT RESEARCH CASES
+    # =========================
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS research_cases (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            library_item_id INTEGER NOT NULL,
+            schema_version TEXT NOT NULL,
+            prompt_version TEXT NOT NULL,
+            source_hash TEXT NOT NULL,
+            semantic_json TEXT NOT NULL DEFAULT '{}',
+            embedding_json TEXT NOT NULL DEFAULT '[]',
+            embedding_model TEXT NOT NULL,
+            generation_model TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'processing',
+            error_message TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (project_id)
+            REFERENCES projects(id)
+            ON DELETE CASCADE,
+
+            FOREIGN KEY (library_item_id)
+            REFERENCES library_items(id)
+            ON DELETE CASCADE,
+
+            FOREIGN KEY (library_item_id, project_id)
+            REFERENCES library_item_projects(item_id, project_id)
+            ON DELETE CASCADE,
+
+            UNIQUE(project_id, library_item_id),
+
+            CHECK (status IN ('processing', 'ready', 'failed'))
+        )
+    """)
+
+    research_case_columns = cur.execute(
+        "PRAGMA table_info(research_cases)"
+    ).fetchall()
+    research_case_column_names = {
+        column["name"] for column in research_case_columns
+    }
+
+    if "generation_model" not in research_case_column_names:
+        cur.execute(
+            """
+            ALTER TABLE research_cases
+            ADD COLUMN generation_model TEXT NOT NULL DEFAULT 'unknown'
+            """
+        )
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_research_cases_project_status
+        ON research_cases(project_id, status, updated_at DESC)
     """)
 
     # =========================
