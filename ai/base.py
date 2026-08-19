@@ -8,7 +8,13 @@ class AIProvider(ABC):
         pass
 
     @abstractmethod
-    def generate_json(self, prompt: str) -> Any:
+    def generate_json(
+        self,
+        prompt: str,
+        *,
+        json_schema: dict | None = None,
+        max_output_tokens: int | None = None,
+    ) -> Any:
         pass
 
     @abstractmethod

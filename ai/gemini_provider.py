@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 from typing import Any, Optional
 
 from dotenv import load_dotenv
@@ -21,6 +22,43 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 TRANSIENT_GEMINI_STATUS_CODES = {408, 429, 500, 502, 503, 504}
+
+
+def _parse_json_response(response_text: str) -> Any:
+    """Parse JSON while tolerating harmless Markdown fences or trailing prose."""
+    text = str(response_text or "").strip()
+
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text, count=1, flags=re.I)
+        text = re.sub(r"\s*```$", "", text, count=1)
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as original_error:
+        starts = [index for index in (text.find("{"), text.find("[")) if index >= 0]
+
+        if not starts:
+            raise original_error
+
+        start = min(starts)
+        closing = "}" if text[start] == "{" else "]"
+        end = text.rfind(closing)
+
+        if end <= start:
+            raise original_error
+
+        return json.loads(text[start:end + 1])
+
+
+def _finish_reason(response) -> str:
+    candidates = getattr(response, "candidates", None) or []
+
+    if not candidates:
+        return ""
+
+    reason = getattr(candidates[0], "finish_reason", "")
+    reason = getattr(reason, "value", reason)
+    return str(reason or "").upper()
 
 
 class GeminiProvider(AIProvider):
@@ -157,21 +195,60 @@ class GeminiProvider(AIProvider):
 
         return response.text.strip()
 
-    def generate_json(self, prompt: str) -> Any:
-        response = self._generate_content(
-            prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json"
-            ),
-        )
+    def generate_json(
+        self,
+        prompt: str,
+        *,
+        json_schema: dict | None = None,
+        max_output_tokens: int | None = None,
+    ) -> Any:
+        config_values: dict[str, Any] = {
+            "response_mime_type": "application/json",
+        }
+
+        if json_schema:
+            config_values["response_json_schema"] = json_schema
+
+        if max_output_tokens is not None:
+            config_values["max_output_tokens"] = max(
+                256,
+                min(int(max_output_tokens), 16_384),
+            )
+
+        config = types.GenerateContentConfig(**config_values)
+        response = self._generate_content(prompt, config=config)
 
         if not response.text:
             raise ValueError("Gemini nu a returnat niciun JSON.")
 
         try:
-            return json.loads(response.text)
-        except json.JSONDecodeError as exc:
-            raise ValueError("Gemini nu a returnat JSON valid.") from exc
+            return _parse_json_response(response.text)
+        except json.JSONDecodeError:
+            retry_prompt = (
+                f"{prompt}\n\n"
+                "The previous response could not be parsed. Return one compact, "
+                "complete JSON value only. Do not use Markdown fences or commentary."
+            )
+            retry_response = self._generate_content(retry_prompt, config=config)
+
+            if retry_response.text:
+                try:
+                    return _parse_json_response(retry_response.text)
+                except json.JSONDecodeError as retry_error:
+                    response = retry_response
+                    final_error = retry_error
+            else:
+                raise ValueError("Gemini nu a returnat niciun JSON.")
+
+            if "MAX_TOKENS" in _finish_reason(response):
+                raise ValueError(
+                    "Răspunsul Gemini a fost trunchiat înainte ca JSON-ul să fie "
+                    "complet. Reîncearcă procesarea articolului."
+                ) from final_error
+
+            raise ValueError(
+                "Gemini nu a returnat JSON valid după două încercări."
+            ) from final_error
 
     def generate_embedding(
         self,

@@ -16,7 +16,15 @@ Acesta este un rezumat de test.
 Experimentul conține observații importante, iar cercetătorul a notat rezultate care pot fi analizate ulterior.
 """
 
-    def generate_json(self, prompt: str) -> Any:
+    def generate_json(
+        self,
+        prompt: str,
+        *,
+        json_schema: dict | None = None,
+        max_output_tokens: int | None = None,
+    ) -> Any:
+        del json_schema, max_output_tokens
+
         if "PROJECT_CASE_EXTRACTION_REQUEST" in prompt:
             return {
                 "metadata": {

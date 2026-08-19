@@ -2948,7 +2948,7 @@ def render_experiment_recommendations(projects):
         st.write("")
 
         if st.button(
-            "Find relevant experiments",
+            "Recommend Next Experiment",
             key=f"recommend_relevant_experiments_{project_id}",
             disabled=coverage["ready"] == 0,
             type="primary",

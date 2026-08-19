@@ -246,6 +246,45 @@ class SecurityHardeningTestCase(unittest.TestCase):
         self.assertIn("untrusted data", str(config.system_instruction).lower())
         self.assertEqual(config.max_output_tokens, 4096)
 
+    def test_gemini_json_uses_schema_budget_and_recovers_fenced_json(self):
+        provider = GeminiProvider.__new__(GeminiProvider)
+        provider.model = "test-model"
+        provider.fallback_model = ""
+        provider.client = Mock()
+        provider.client.models.generate_content.return_value = Mock(
+            text='```json\n{"value": 1}\n```'
+        )
+        schema = {
+            "type": "object",
+            "properties": {"value": {"type": "integer"}},
+            "required": ["value"],
+        }
+
+        result = provider.generate_json(
+            "Return a value.",
+            json_schema=schema,
+            max_output_tokens=8192,
+        )
+
+        self.assertEqual(result, {"value": 1})
+        config = provider.client.models.generate_content.call_args.kwargs["config"]
+        self.assertEqual(config.response_json_schema, schema)
+        self.assertEqual(config.max_output_tokens, 8192)
+
+    def test_gemini_json_retries_once_and_reports_truncation(self):
+        provider = GeminiProvider.__new__(GeminiProvider)
+        provider.model = "test-model"
+        provider.fallback_model = ""
+        provider.client = Mock()
+        truncated = Mock(text='{"value":')
+        truncated.candidates = [Mock(finish_reason="MAX_TOKENS")]
+        provider.client.models.generate_content.return_value = truncated
+
+        with self.assertRaisesRegex(ValueError, "trunchiat"):
+            provider.generate_json("Return a value.")
+
+        self.assertEqual(provider.client.models.generate_content.call_count, 2)
+
     def test_gemini_embedding_uses_retrieval_task_and_bounded_dimensions(self):
         provider = GeminiProvider.__new__(GeminiProvider)
         provider.embedding_model = "test-embedding-model"
