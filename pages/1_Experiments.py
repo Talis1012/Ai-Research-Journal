@@ -551,13 +551,19 @@ def render_experiment_list(
                 f'<div class="date-label">{safe_html(group_label)}</div>'
             )
 
-        experiment_card(
+        selected = chat["id"] == st.session_state.get("selected_chat_id")
+        clicked = experiment_card(
             title=chat["title"],
             snippet=chat["objective"] or "No objective added yet.",
             created_at=chat["created_at"],
-            selected=chat["id"] == st.session_state.get("selected_chat_id"),
+            selected=selected,
             chat_id=chat["id"],
         )
+
+        if clicked and not selected:
+            st.session_state["selected_chat_id"] = chat["id"]
+            st.query_params["chat_id"] = str(chat["id"])
+            st.rerun(scope="app")
 
 
 @st.fragment

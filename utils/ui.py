@@ -949,6 +949,55 @@ def load_css():
             background: #f7fbff;
         }
 
+        div[class*="st-key-experiment_selector_"] {
+            position: relative;
+            margin-bottom: 0;
+        }
+
+        div[class*="st-key-experiment_selector_"] > div[data-testid="stElementContainer"]:has(> div[data-testid="stButton"]) {
+            position: absolute;
+            inset: 0;
+            z-index: 5;
+            width: 100%;
+            height: auto;
+            margin: 0;
+        }
+
+        div[class*="st-key-experiment_selector_"] div[data-testid="stButton"] {
+            position: static;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+        }
+
+        div[class*="st-key-experiment_selector_"] div[data-testid="stButton"] > div,
+        div[class*="st-key-experiment_selector_"] div[data-testid="stButton"] [data-testid="stTooltipIcon"],
+        div[class*="st-key-experiment_selector_"] div[data-testid="stButton"] [data-testid="stTooltipHoverTarget"] {
+            width: 100%;
+            height: 100%;
+        }
+
+        div[class*="st-key-experiment_selector_"] div[data-testid="stButton"] button {
+            width: 100% !important;
+            height: 100% !important;
+            min-height: 100% !important;
+            padding: 0 !important;
+            border: 0 !important;
+            border-radius: 7px !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            cursor: pointer;
+        }
+
+        div[class*="st-key-experiment_selector_"]:has(button:hover) .experiment-row {
+            background: #f7fbff;
+        }
+
+        div[class*="st-key-experiment_selector_"]:has(button:focus-visible) .experiment-row {
+            outline: 2px solid #1769d2;
+            outline-offset: 2px;
+        }
+
         .experiment-title {
             color: #111827;
             font-size: 0.9rem;
@@ -1706,20 +1755,36 @@ def header_icons():
                     logout()
 
 
-def experiment_card(title: str, snippet: str, created_at: str, selected: bool = False, chat_id: int | None = None):
+def experiment_card(
+    title: str,
+    snippet: str,
+    created_at: str,
+    selected: bool = False,
+    chat_id: int | None = None,
+) -> bool:
     class_name = "experiment-row selected" if selected else "experiment-row"
-    tag = "a" if chat_id is not None else "div"
-    href = f' href="?chat_id={chat_id}" target="_self"' if chat_id is not None else ""
-
-    render_html(
-        f"""
-        <{tag} class="{class_name}"{href}>
+    markup = f"""
+        <div class="{class_name}">
             <div class="experiment-title">{safe_html(title)}</div>
             <div class="experiment-time">{safe_html(compact_date(created_at))}</div>
             <div class="experiment-snippet">{safe_html(snippet or "No objective added yet.")}</div>
-        </{tag}>
-        """
-    )
+        </div>
+    """
+
+    if chat_id is None:
+        render_html(markup)
+        return False
+
+    with st.container(key=f"experiment_selector_{chat_id}"):
+        clicked = st.button(
+            f"Select {title}",
+            key=f"experiment_select_button_{chat_id}",
+            help=f"Open {title}",
+            width="stretch",
+        )
+        render_html(markup)
+
+    return clicked
 
 
 def stat_card(title: str, value: str, subtitle: str, icon: str, tone: str = "blue", updated: str = "Ready"):
