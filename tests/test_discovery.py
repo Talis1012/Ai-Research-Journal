@@ -1,4 +1,6 @@
+import re
 import unittest
+from copy import deepcopy
 from unittest.mock import Mock, patch
 
 from services.discovery_service import rank_discovery_results
@@ -10,7 +12,8 @@ from services.openalex_service import (
 
 
 class FixedRankingProvider:
-    def generate_json(self, prompt):
+    def generate_json(self, prompt, **kwargs):
+        del prompt, kwargs
         return {
             "papers": [
                 {
@@ -41,6 +44,49 @@ class FixedRankingProvider:
                 },
             ]
         }
+
+
+class BatchedRankingProvider:
+    def __init__(self):
+        self.calls = []
+
+    def generate_json(self, prompt, **kwargs):
+        candidates_match = re.search(
+            r"CANDIDATES_JSON_START\s*(.*?)\s*CANDIDATES_JSON_END",
+            prompt,
+            flags=re.DOTALL,
+        )
+        candidates_text = candidates_match.group(1) if candidates_match else ""
+        ranking_ids = list(
+            dict.fromkeys(re.findall(r"candidate-\d+", candidates_text))
+        )
+        self.calls.append({"ranking_ids": ranking_ids, **kwargs})
+        return {
+            "papers": [
+                {
+                    "ranking_id": ranking_id,
+                    "rubric": {
+                        "direct_topic_relevance": 30,
+                        "method_compatibility": 20,
+                        "outcome_relevance": 15,
+                        "research_gap_contribution": 10,
+                    },
+                    "reason": "Relevant to the supplied project profile.",
+                    "matched_concepts": ["project topic"],
+                    "limitations": "Abstract-only assessment.",
+                    "confidence": "Medium",
+                }
+                for ranking_id in ranking_ids
+            ]
+        }
+
+
+class PartiallyFailingRankingProvider(BatchedRankingProvider):
+    def generate_json(self, prompt, **kwargs):
+        if len(self.calls) == 1:
+            raise RuntimeError("temporary second-batch failure")
+
+        return super().generate_json(prompt, **kwargs)
 
 
 class DiscoveryRankingTestCase(unittest.TestCase):
@@ -121,6 +167,71 @@ class DiscoveryRankingTestCase(unittest.TestCase):
         self.assertTrue(all(work["ai_score"] is None for work in ranked))
         self.assertTrue(
             all(work["final_score"] == work["base_score"] for work in ranked)
+        )
+
+    def test_large_result_set_is_ranked_in_schema_constrained_batches(self):
+        results = []
+
+        for index in range(12):
+            work = deepcopy(self.results[index % len(self.results)])
+            work["openalex_id"] = f"W{index + 1}"
+            work["title"] = f"Candidate paper {index + 1}"
+            results.append(work)
+
+        provider = BatchedRankingProvider()
+
+        with patch.dict(
+            "os.environ",
+            {
+                "DISCOVERY_AI_RANKING_BATCH_SIZE": "5",
+                "DISCOVERY_RANKING_MAX_OUTPUT_TOKENS": "6144",
+            },
+        ):
+            ranked, ai_error = rank_discovery_results(
+                results,
+                profile=self.profile,
+                ideas=self.ideas,
+                queries=self.profile["search_queries"],
+                ai_provider=provider,
+            )
+
+        self.assertEqual(ai_error, "")
+        self.assertEqual(len(provider.calls), 3)
+        self.assertEqual(
+            [len(call["ranking_ids"]) for call in provider.calls],
+            [5, 5, 2],
+        )
+        self.assertTrue(all(work["ai_score"] is not None for work in ranked))
+        self.assertEqual({work["ai_score"] for work in ranked}, {70, 75})
+
+        for call, expected_size in zip(provider.calls, (5, 5, 2)):
+            self.assertEqual(call["max_output_tokens"], 6144)
+            papers_schema = call["json_schema"]["properties"]["papers"]
+            self.assertEqual(papers_schema["minItems"], expected_size)
+            self.assertEqual(papers_schema["maxItems"], expected_size)
+
+    def test_successful_batches_survive_a_later_batch_failure(self):
+        results = []
+
+        for index in range(7):
+            work = deepcopy(self.results[0])
+            work["openalex_id"] = f"W{index + 1}"
+            work["title"] = f"Candidate paper {index + 1}"
+            results.append(work)
+
+        provider = PartiallyFailingRankingProvider()
+        ranked, ai_error = rank_discovery_results(
+            results,
+            profile=self.profile,
+            ideas=self.ideas,
+            queries=self.profile["search_queries"],
+            ai_provider=provider,
+        )
+
+        self.assertIn("Batch 2/2", ai_error)
+        self.assertEqual(
+            sum(work["ai_score"] is not None for work in ranked),
+            5,
         )
 
 

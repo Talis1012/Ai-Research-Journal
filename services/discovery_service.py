@@ -4,6 +4,7 @@ from collections import Counter
 from datetime import date
 
 from ai.factory import get_ai_provider
+from services.resource_limits import env_int
 from services.summary_service import format_messages_for_ai
 from utils.prompts import UNTRUSTED_CONTENT_RULES, untrusted_data, user_request
 
@@ -19,6 +20,77 @@ DISCOVERY_BASE_WEIGHTS = {
 
 DISCOVERY_AI_WEIGHT = 0.45
 DISCOVERY_BASE_WEIGHT = 0.55
+
+
+def _discovery_ranking_json_schema(candidate_count: int) -> dict:
+    return {
+        "type": "object",
+        "properties": {
+            "papers": {
+                "type": "array",
+                "minItems": candidate_count,
+                "maxItems": candidate_count,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "ranking_id": {"type": "string"},
+                        "rubric": {
+                            "type": "object",
+                            "properties": {
+                                "direct_topic_relevance": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 40,
+                                },
+                                "method_compatibility": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 25,
+                                },
+                                "outcome_relevance": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 20,
+                                },
+                                "research_gap_contribution": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 15,
+                                },
+                            },
+                            "required": [
+                                "direct_topic_relevance",
+                                "method_compatibility",
+                                "outcome_relevance",
+                                "research_gap_contribution",
+                            ],
+                        },
+                        "reason": {"type": "string"},
+                        "matched_concepts": {
+                            "type": "array",
+                            "maxItems": 4,
+                            "items": {"type": "string"},
+                        },
+                        "limitations": {"type": "string"},
+                        "confidence": {
+                            "type": "string",
+                            "enum": ["High", "Medium", "Low"],
+                        },
+                    },
+                    "required": [
+                        "ranking_id",
+                        "rubric",
+                        "reason",
+                        "matched_concepts",
+                        "limitations",
+                        "confidence",
+                    ],
+                },
+            },
+        },
+        "required": ["papers"],
+    }
+
 
 _STOP_WORDS = {
     "a", "about", "after", "all", "also", "an", "and", "are", "as", "at",
@@ -263,6 +335,12 @@ def _ai_ranking_prompt(
         }
         for idea in ideas or []
     ]
+    expected_ranking_ids = [work["ranking_id"] for work in scored_results]
+    example_ranking_id = (
+        expected_ranking_ids[0]
+        if expected_ranking_ids
+        else "candidate-id"
+    )
     return f"""
 DISCOVER_RANKING_REQUEST
 
@@ -278,13 +356,17 @@ Score every candidate with this exact rubric:
 
 The AI score is the sum of these four fields. If the abstract is missing, be
 conservative and state that limitation. Give a short evidence-based reason and
-up to four matched concepts.
+up to four matched concepts. Return exactly one entry for every supplied
+ranking_id. Keep reason under 45 words and limitations under 25 words.
+
+Expected ranking_id values for this batch:
+{untrusted_data(expected_ranking_ids, "required ranking identifiers")}
 
 Return STRICT JSON in this format:
 {{
   "papers": [
     {{
-      "ranking_id": "candidate-1",
+      "ranking_id": "{example_ranking_id}",
       "rubric": {{
         "direct_topic_relevance": 0,
         "method_compatibility": 0,
@@ -381,6 +463,46 @@ def _apply_ai_ranking(scored_results: list[dict], response: dict):
         })
 
 
+def _ranking_batches(scored_results: list[dict]) -> list[list[dict]]:
+    batch_size = env_int(
+        "DISCOVERY_AI_RANKING_BATCH_SIZE",
+        5,
+        minimum=1,
+        maximum=10,
+    )
+    return [
+        scored_results[index:index + batch_size]
+        for index in range(0, len(scored_results), batch_size)
+    ]
+
+
+def _validate_ranking_response(batch: list[dict], response) -> None:
+    if not isinstance(response, dict) or not isinstance(
+        response.get("papers"),
+        list,
+    ):
+        raise ValueError("AI ranking response has an invalid structure.")
+
+    expected_ids = {str(work["ranking_id"]) for work in batch}
+    returned_ids = {
+        str(row.get("ranking_id") or "")
+        for row in response["papers"]
+        if isinstance(row, dict)
+    }
+    missing_ids = expected_ids - returned_ids
+    unexpected_ids = returned_ids - expected_ids
+
+    if (
+        len(response["papers"]) != len(batch)
+        or missing_ids
+        or unexpected_ids
+    ):
+        raise ValueError(
+            "AI ranking did not return exactly one result for every paper in "
+            "the batch."
+        )
+
+
 def rank_discovery_results(
     results: list[dict],
     *,
@@ -399,24 +521,37 @@ def rank_discovery_results(
     if not scored_results:
         return [], ""
 
-    ai_error = ""
+    ai = ai_provider or get_ai_provider()
+    batches = _ranking_batches(scored_results)
+    batch_errors = []
 
-    try:
-        ai = ai_provider or get_ai_provider()
-        response = ai.generate_json(
-            _ai_ranking_prompt(
-                profile=profile,
-                ideas=ideas or [],
-                scored_results=scored_results,
+    for batch_index, batch in enumerate(batches, start=1):
+        try:
+            response = ai.generate_json(
+                _ai_ranking_prompt(
+                    profile=profile,
+                    ideas=ideas or [],
+                    scored_results=batch,
+                ),
+                json_schema=_discovery_ranking_json_schema(len(batch)),
+                max_output_tokens=env_int(
+                    "DISCOVERY_RANKING_MAX_OUTPUT_TOKENS",
+                    6144,
+                    minimum=1024,
+                    maximum=16_384,
+                ),
             )
-        )
+            _validate_ranking_response(batch, response)
+            _apply_ai_ranking(batch, response)
+        except Exception as exc:
+            if len(batches) == 1:
+                batch_errors.append(str(exc))
+            else:
+                batch_errors.append(
+                    f"Batch {batch_index}/{len(batches)}: {exc}"
+                )
 
-        if not isinstance(response, dict) or not isinstance(response.get("papers"), list):
-            raise ValueError("AI ranking response has an invalid structure.")
-
-        _apply_ai_ranking(scored_results, response)
-    except Exception as exc:
-        ai_error = str(exc)
+    ai_error = " · ".join(batch_errors)
 
     scored_results.sort(
         key=lambda work: (
