@@ -182,6 +182,150 @@ RESEARCH_CASE_JSON_SCHEMA = {
     ],
 }
 
+FINAL_EXPERIMENT_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "title": {"type": "string"},
+        "objective": {"type": "string"},
+        "hypothesis": {"type": "string"},
+        "template_type": {
+            "type": "string",
+            "enum": list(EXPERIMENT_TEMPLATE_TAXONOMY),
+        },
+        "rationale": {"type": "string"},
+        "independent_variables": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 5,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "levels": {
+                        "type": "array",
+                        "minItems": 2,
+                        "maxItems": 12,
+                        "items": {"type": "string"},
+                    },
+                    "rationale": {"type": "string"},
+                },
+                "required": ["name", "levels", "rationale"],
+            },
+        },
+        "control_condition": {"type": "string"},
+        "controlled_variables": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "experimental_units": {
+            "type": "object",
+            "properties": {
+                "unit": {"type": "string"},
+                "groups": {"type": "integer", "minimum": 1},
+                "replicates_per_group": {"type": "integer", "minimum": 1},
+                "total_units": {"type": "integer", "minimum": 1},
+            },
+            "required": [
+                "unit",
+                "groups",
+                "replicates_per_group",
+                "total_units",
+            ],
+        },
+        "materials_and_setup": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "randomization": {"type": "string"},
+        "blinding": {"type": "string"},
+        "procedure_steps": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 20,
+            "items": {"type": "string"},
+        },
+        "measurements": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 15,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "unit": {"type": "string"},
+                    "timing": {"type": "string"},
+                    "role": {
+                        "type": "string",
+                        "enum": ["Primary", "Secondary", "Diagnostic"],
+                    },
+                },
+                "required": ["name", "unit", "timing", "role"],
+            },
+        },
+        "duration": {"type": "string"},
+        "analysis_plan": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string"},
+        },
+        "success_criteria": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string"},
+        },
+        "stop_conditions": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string"},
+        },
+        "assumptions": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string"},
+        },
+        "evidence_basis": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 12,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "library_item_id": {"type": "integer"},
+                    "supported_choice": {"type": "string"},
+                },
+                "required": ["library_item_id", "supported_choice"],
+            },
+        },
+        "confidence": {
+            "type": "string",
+            "enum": ["High", "Medium", "Low"],
+        },
+    },
+    "required": [
+        "title",
+        "objective",
+        "hypothesis",
+        "template_type",
+        "rationale",
+        "independent_variables",
+        "control_condition",
+        "controlled_variables",
+        "experimental_units",
+        "materials_and_setup",
+        "randomization",
+        "blinding",
+        "procedure_steps",
+        "measurements",
+        "duration",
+        "analysis_plan",
+        "success_criteria",
+        "stop_conditions",
+        "assumptions",
+        "evidence_basis",
+        "confidence",
+    ],
+}
+
 _TEMPLATE_ALIASES = {
     "model_comparison": "comparative_evaluation",
     "method_comparison": "comparative_evaluation",
@@ -995,6 +1139,398 @@ def _cosine_similarity(left: list[float], right: list[float]) -> float:
     return max(-1.0, min(1.0, numerator / (left_norm * right_norm)))
 
 
+def _positive_int(value, *, default: int = 1, maximum: int = 1_000_000) -> int:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        number = default
+
+    return max(1, min(number, maximum))
+
+
+def _final_experiment_sources(retrieved: list[dict]) -> list[dict]:
+    max_sources = env_int(
+        "MAX_FINAL_EXPERIMENT_SOURCES",
+        8,
+        maximum=20,
+    )
+    max_experiments = env_int(
+        "MAX_FINAL_EXPERIMENT_EVIDENCE_EXAMPLES",
+        30,
+        maximum=100,
+    )
+    sources = []
+    experiment_count = 0
+
+    for rank, case in enumerate(retrieved[:max_sources], start=1):
+        semantic = case.get("semantic", {})
+        strategies = []
+
+        for experiment in semantic.get("experimental_strategy", []):
+            if experiment_count >= max_experiments:
+                break
+
+            strategies.append({
+                "template_type": experiment.get("template_type", ""),
+                "goal": experiment.get("goal", ""),
+                "changed_variable": experiment.get("changed_variable", ""),
+                "controlled_variables": experiment.get(
+                    "controlled_variables",
+                    [],
+                ),
+                "evaluation_metric": experiment.get("evaluation_metric", ""),
+                "motivation": experiment.get("motivation", ""),
+                "concrete_example": experiment.get("concrete_example", ""),
+                "evidence": experiment.get("evidence", {}),
+            })
+            experiment_count += 1
+
+        sources.append({
+            "library_item_id": int(case["library_item_id"]),
+            "title": case.get("article_title") or "Untitled article",
+            "authors": case.get("article_authors") or "",
+            "publication_year": case.get("publication_year"),
+            "doi": case.get("doi") or "",
+            "url": case.get("url") or "",
+            "retrieval_rank": rank,
+            "similarity_score": round(
+                max(0.0, float(case.get("similarity") or 0.0)) * 100,
+                1,
+            ),
+            "source_quality": semantic.get("metadata", {}).get(
+                "source_quality",
+                "unknown",
+            ),
+            "research_context": semantic.get("research_context", {}),
+            "proposed_solution": semantic.get("proposed_solution", {}),
+            "experimental_strategies": strategies,
+            "findings": semantic.get("findings", {}),
+        })
+
+        if experiment_count >= max_experiments:
+            break
+
+    return sources
+
+
+def _final_experiment_project_context(
+    project_id: int,
+    project_semantic: dict,
+) -> dict:
+    project = get_project_by_id(project_id)
+    messages = get_project_messages(project_id)
+    ideas = get_project_ideas(project_id)
+    return {
+        "project": {
+            "name": _row_value(project, "name", ""),
+            "domain": _row_value(project, "domain", ""),
+            "description": _row_value(project, "description", ""),
+        },
+        "semantic_query": project_semantic,
+        "prior_experiments_and_notes": [
+            {
+                "experiment": _row_value(message, "chat_title", ""),
+                "type": _row_value(message, "type", ""),
+                "content": _text(
+                    _row_value(message, "content", ""),
+                    maximum=1600,
+                ),
+            }
+            for message in list(messages or [])[-120:]
+        ],
+        "saved_ideas": [
+            {
+                "title": _row_value(idea, "title", ""),
+                "description": _text(
+                    _row_value(idea, "description", ""),
+                    maximum=1200,
+                ),
+                "evidence": _text(
+                    _row_value(idea, "evidence", ""),
+                    maximum=800,
+                ),
+            }
+            for idea in list(ideas or [])[:50]
+        ],
+    }
+
+
+def _final_experiment_prompt(
+    *,
+    project_context: dict,
+    sources: list[dict],
+) -> str:
+    taxonomy = {
+        key: value["description"]
+        for key, value in EXPERIMENT_TEMPLATE_TAXONOMY.items()
+    }
+    return f"""
+FINAL_EXPERIMENT_SYNTHESIS_REQUEST
+
+Synthesize exactly one complete next experiment for the current research
+project. This must be a new, actionable protocol that resolves the most useful
+next uncertainty in the project; do not merely copy an experiment title or
+return a list of literature precedents.
+
+Use prior project experiments and notes to avoid recommending work that has
+already been completed. Ground the design pattern and rationale in the supplied
+retrieved Research Cases. You may propose operational values needed to make the
+protocol executable, but every value that is not explicitly supported by the
+project or a retrieved source must also be disclosed in assumptions. Never
+present a proposed value as a reported literature result.
+
+Requirements:
+- Return one experiment only.
+- State a falsifiable hypothesis.
+- Specify factor levels, a control, controlled variables, experimental units,
+  replication, materials/setup, randomization, blinding or why it is infeasible,
+  ordered procedure, measurements with units and timing, duration, analysis,
+  success criteria, and stop conditions.
+- Choose one template_type from this taxonomy:
+  {json.dumps(taxonomy, ensure_ascii=False)}
+- Cite only library_item_id values present in SYNTHESIS_SOURCES_JSON and explain
+  which design choice each source supports.
+- Use the language used by the project notes. If it is ambiguous, use Romanian.
+- Treat this as an AI-generated research proposal requiring scientific, safety,
+  ethical, and statistical review before execution.
+
+PROJECT_CONTEXT_JSON:
+{untrusted_data(project_context, "project context and prior work")}
+
+SYNTHESIS_SOURCES_JSON_START
+{untrusted_data(sources, "retrieved Research Cases")}
+SYNTHESIS_SOURCES_JSON_END
+
+{UNTRUSTED_CONTENT_RULES}
+"""
+
+
+def _normalize_final_experiment(data, sources: list[dict]) -> dict:
+    if not isinstance(data, dict):
+        raise ValueError("Gemini did not return a final experiment object.")
+
+    template_type = normalize_template_type(data.get("template_type"), data)
+    taxonomy = EXPERIMENT_TEMPLATE_TAXONOMY[template_type]
+    variables = []
+
+    for raw_variable in data.get("independent_variables", [])[:5]:
+        if not isinstance(raw_variable, dict):
+            continue
+
+        name = _text(raw_variable.get("name"), maximum=300)
+        levels = _string_list(
+            raw_variable.get("levels"),
+            maximum=12,
+            item_chars=240,
+        )
+
+        if name and len(levels) >= 2:
+            variables.append({
+                "name": name,
+                "levels": levels,
+                "rationale": _text(
+                    raw_variable.get("rationale"),
+                    maximum=1000,
+                ),
+            })
+
+    if not variables:
+        raise ValueError(
+            "The synthesized experiment did not define a usable independent variable."
+        )
+
+    raw_units = (
+        data.get("experimental_units")
+        if isinstance(data.get("experimental_units"), dict)
+        else {}
+    )
+    groups = _positive_int(raw_units.get("groups"), maximum=10_000)
+    replicates = _positive_int(
+        raw_units.get("replicates_per_group"),
+        maximum=1_000_000,
+    )
+    experimental_units = {
+        "unit": _text(raw_units.get("unit"), maximum=300),
+        "groups": groups,
+        "replicates_per_group": replicates,
+        "total_units": groups * replicates,
+    }
+    measurements = []
+
+    for raw_measurement in data.get("measurements", [])[:15]:
+        if not isinstance(raw_measurement, dict):
+            continue
+
+        name = _text(raw_measurement.get("name"), maximum=300)
+        role = _text(raw_measurement.get("role"), maximum=40).title()
+
+        if role not in {"Primary", "Secondary", "Diagnostic"}:
+            role = "Secondary"
+
+        if name:
+            measurements.append({
+                "name": name,
+                "unit": _text(raw_measurement.get("unit"), maximum=120),
+                "timing": _text(
+                    raw_measurement.get("timing"),
+                    maximum=300,
+                ),
+                "role": role,
+            })
+
+    if not measurements:
+        raise ValueError(
+            "The synthesized experiment did not define a measurable outcome."
+        )
+
+    sources_by_id = {
+        int(source["library_item_id"]): source
+        for source in sources
+    }
+    evidence_basis = []
+    seen_source_ids = set()
+
+    for raw_evidence in data.get("evidence_basis", [])[:12]:
+        if not isinstance(raw_evidence, dict):
+            continue
+
+        try:
+            library_item_id = int(raw_evidence.get("library_item_id"))
+        except (TypeError, ValueError):
+            continue
+
+        source = sources_by_id.get(library_item_id)
+
+        if source is None or library_item_id in seen_source_ids:
+            continue
+
+        supported_choice = _text(
+            raw_evidence.get("supported_choice"),
+            maximum=1200,
+        )
+
+        if not supported_choice:
+            continue
+
+        seen_source_ids.add(library_item_id)
+        evidence_basis.append({
+            "library_item_id": library_item_id,
+            "article_title": source["title"],
+            "article_authors": source.get("authors") or "",
+            "publication_year": source.get("publication_year"),
+            "doi": source.get("doi") or "",
+            "url": source.get("url") or "",
+            "top_k_rank": source["retrieval_rank"],
+            "similarity_score": source["similarity_score"],
+            "source_quality": source.get("source_quality") or "unknown",
+            "supported_choice": supported_choice,
+        })
+
+    if not evidence_basis:
+        raise ValueError(
+            "The synthesized experiment did not cite a valid retrieved Research Case."
+        )
+
+    confidence = _text(data.get("confidence"), maximum=20).title()
+
+    if confidence not in {"High", "Medium", "Low"}:
+        confidence = "Medium"
+
+    return {
+        "title": _text(data.get("title"), maximum=500),
+        "objective": _text(data.get("objective"), maximum=2500),
+        "hypothesis": _text(data.get("hypothesis"), maximum=2500),
+        "template_type": template_type,
+        "template_label": taxonomy["label"],
+        "template_description": taxonomy["description"],
+        "rationale": _text(data.get("rationale"), maximum=3000),
+        "independent_variables": variables,
+        "control_condition": _text(
+            data.get("control_condition"),
+            maximum=1600,
+        ),
+        "controlled_variables": _string_list(
+            data.get("controlled_variables"),
+            maximum=30,
+            item_chars=400,
+        ),
+        "experimental_units": experimental_units,
+        "materials_and_setup": _string_list(
+            data.get("materials_and_setup"),
+            maximum=30,
+            item_chars=600,
+        ),
+        "randomization": _text(data.get("randomization"), maximum=1200),
+        "blinding": _text(data.get("blinding"), maximum=1200),
+        "procedure_steps": _string_list(
+            data.get("procedure_steps"),
+            maximum=20,
+            item_chars=1200,
+        ),
+        "measurements": measurements,
+        "duration": _text(data.get("duration"), maximum=600),
+        "analysis_plan": _string_list(
+            data.get("analysis_plan"),
+            maximum=20,
+            item_chars=1000,
+        ),
+        "success_criteria": _string_list(
+            data.get("success_criteria"),
+            maximum=20,
+            item_chars=1000,
+        ),
+        "stop_conditions": _string_list(
+            data.get("stop_conditions"),
+            maximum=20,
+            item_chars=1000,
+        ),
+        "assumptions": _string_list(
+            data.get("assumptions"),
+            maximum=30,
+            item_chars=1000,
+        ),
+        "evidence_basis": evidence_basis,
+        "confidence": confidence,
+    }
+
+
+def synthesize_final_experiment(
+    project_id: int,
+    *,
+    project_semantic: dict,
+    retrieved: list[dict],
+    ai_provider,
+) -> dict:
+    sources = _final_experiment_sources(retrieved)
+
+    if not sources or not any(
+        source.get("experimental_strategies")
+        for source in sources
+    ):
+        raise ValueError(
+            "The retrieved Research Cases contain no experimental strategy to "
+            "support a final synthesis."
+        )
+
+    project_context = _final_experiment_project_context(
+        project_id,
+        project_semantic,
+    )
+    raw_experiment = ai_provider.generate_json(
+        _final_experiment_prompt(
+            project_context=project_context,
+            sources=sources,
+        ),
+        json_schema=FINAL_EXPERIMENT_JSON_SCHEMA,
+        max_output_tokens=env_int(
+            "FINAL_EXPERIMENT_MAX_OUTPUT_TOKENS",
+            8192,
+            maximum=16_384,
+        ),
+    )
+    return _normalize_final_experiment(raw_experiment, sources)
+
+
 def recommend_relevant_experiments(
     project_id: int,
     *,
@@ -1108,6 +1644,24 @@ def recommend_relevant_experiments(
         ),
         reverse=True,
     )
+    final_experiment = None
+    synthesis_error = ""
+
+    if recommendations:
+        try:
+            final_experiment = synthesize_final_experiment(
+                project_id,
+                project_semantic=project_semantic,
+                retrieved=retrieved,
+                ai_provider=ai,
+            )
+        except Exception as exc:
+            synthesis_error = str(exc)
+    else:
+        synthesis_error = (
+            "The retrieved Research Cases contain no source-supported "
+            "experimental strategy to synthesize."
+        )
 
     return {
         "project_id": project_id,
@@ -1117,6 +1671,8 @@ def recommend_relevant_experiments(
         "available_case_count": len(current_cases),
         "retrieved_case_count": len(retrieved),
         "project_semantic": project_semantic,
+        "final_experiment": final_experiment,
+        "synthesis_error": synthesis_error,
         "recommendations": recommendations,
     }
 

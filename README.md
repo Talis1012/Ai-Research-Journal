@@ -10,7 +10,10 @@ Library include și fluxul **Experiment Recommendations**: articolele asociate
 unui proiect sunt transformate în Research Cases standardizate, cu trasabilitate
 și embedding-uri persistente. Baseline-ul recuperează strategiile experimentale
 din cazurile similare, le grupează într-o taxonomie independentă de domeniu și
-afișează exemplele din literatură; nu generează un experiment nou.
+afișează exemplele din literatură. Peste acest strat de retrieval, Gemini
+sintetizează un singur experiment următor complet: ipoteză, variabile și
+niveluri, martor, replicare, procedură, măsurători, analiză, criterii de succes,
+condiții de oprire, ipoteze asumate și surse validate din Research Cases.
 
 ## Arhitectură cloud
 

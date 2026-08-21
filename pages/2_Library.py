@@ -2603,6 +2603,181 @@ def _research_case_source_url(example: dict) -> str:
     return ""
 
 
+def _render_protocol_list(title: str, values, *, ordered: bool = False):
+    normalized_values = [
+        str(value).strip()
+        for value in values or []
+        if str(value).strip()
+    ]
+
+    if not normalized_values:
+        return
+
+    st.markdown(f"**{title}**")
+
+    for index, value in enumerate(normalized_values, start=1):
+        marker = f"{index}." if ordered else "-"
+        render_untrusted_markdown(f"{marker} {value}")
+
+
+def _render_final_experiment(result: dict):
+    experiment = result.get("final_experiment")
+    synthesis_error = str(result.get("synthesis_error") or "").strip()
+    st.markdown("### Recommended Next Experiment")
+
+    if not experiment:
+        st.warning(
+            "A complete experiment could not be synthesized from the retrieved "
+            f"evidence{f': {synthesis_error}' if synthesis_error else '.'}"
+        )
+        return
+
+    render_html(
+        """
+        <div class="recommendation-baseline-note">
+            AI-synthesized protocol grounded in the retrieved Research Cases.
+            Review assumptions, statistical power, safety, and ethics before execution.
+        </div>
+        """
+    )
+
+    with st.container(border=True):
+        render_html(
+            f"""
+            <div class="recommendation-template-title">
+                {safe_html(experiment.get('title') or 'Recommended experiment')}
+            </div>
+            <div class="recommendation-template-meta">
+                {safe_html(experiment.get('template_label') or 'Experimental design')}
+                · confidence {safe_html(experiment.get('confidence') or 'Unknown')}
+            </div>
+            """
+        )
+        st.markdown("**Objective**")
+        render_untrusted_markdown(experiment.get("objective", ""))
+        st.markdown("**Hypothesis**")
+        render_untrusted_markdown(experiment.get("hypothesis", ""))
+        st.markdown("**Why this is the next experiment**")
+        render_untrusted_markdown(experiment.get("rationale", ""))
+
+        st.markdown("#### Experimental design")
+
+        for variable in experiment.get("independent_variables", []):
+            render_html(
+                f"<strong>Independent variable: "
+                f"{safe_html(variable.get('name'))}</strong>"
+            )
+            render_untrusted_caption(
+                "Levels: " + " · ".join(variable.get("levels", []))
+            )
+
+            if variable.get("rationale"):
+                render_untrusted_markdown(variable["rationale"])
+
+        st.markdown("**Control condition**")
+        render_untrusted_markdown(experiment.get("control_condition", ""))
+        _render_protocol_list(
+            "Controlled variables",
+            experiment.get("controlled_variables", []),
+        )
+
+        units = experiment.get("experimental_units", {})
+        unit_col, groups_col, replicates_col, total_col = st.columns(4, gap="small")
+
+        with unit_col:
+            st.metric("Experimental unit", units.get("unit") or "—")
+
+        with groups_col:
+            st.metric("Groups", units.get("groups", "—"))
+
+        with replicates_col:
+            st.metric("Replicates / group", units.get("replicates_per_group", "—"))
+
+        with total_col:
+            st.metric("Total units", units.get("total_units", "—"))
+
+        _render_protocol_list(
+            "Materials and setup",
+            experiment.get("materials_and_setup", []),
+        )
+        st.markdown("**Randomization**")
+        render_untrusted_markdown(experiment.get("randomization", ""))
+        st.markdown("**Blinding**")
+        render_untrusted_markdown(experiment.get("blinding", ""))
+        st.markdown("**Duration**")
+        render_untrusted_markdown(experiment.get("duration", ""))
+        _render_protocol_list(
+            "Procedure",
+            experiment.get("procedure_steps", []),
+            ordered=True,
+        )
+
+        measurements = experiment.get("measurements", [])
+
+        if measurements:
+            st.markdown("**Measurements**")
+            st.dataframe(
+                [
+                    {
+                        "Outcome": measurement.get("name", ""),
+                        "Role": measurement.get("role", ""),
+                        "Unit": measurement.get("unit", ""),
+                        "Timing": measurement.get("timing", ""),
+                    }
+                    for measurement in measurements
+                ],
+                hide_index=True,
+                width="stretch",
+            )
+
+        _render_protocol_list(
+            "Analysis plan",
+            experiment.get("analysis_plan", []),
+            ordered=True,
+        )
+        _render_protocol_list(
+            "Success criteria",
+            experiment.get("success_criteria", []),
+        )
+        _render_protocol_list(
+            "Stop conditions",
+            experiment.get("stop_conditions", []),
+        )
+
+        with st.expander("Assumptions requiring researcher validation", expanded=True):
+            _render_protocol_list(
+                "Proposed or unsupported operational choices",
+                experiment.get("assumptions", []),
+            )
+
+        with st.expander("Evidence basis"):
+            for evidence_index, evidence in enumerate(
+                experiment.get("evidence_basis", []),
+                start=1,
+            ):
+                title = evidence.get("article_title") or "Untitled article"
+                render_html(
+                    f"<strong>{evidence_index}. {safe_html(title)}</strong>"
+                )
+                render_untrusted_caption(
+                    f"Retrieval rank #{evidence.get('top_k_rank', '—')} · "
+                    f"similarity {evidence.get('similarity_score', 0):.1f}% · "
+                    f"source {str(evidence.get('source_quality') or 'unknown').replace('_', ' ')}"
+                )
+                render_untrusted_markdown(evidence.get("supported_choice", ""))
+                source_url = _research_case_source_url(evidence)
+
+                if source_url:
+                    st.link_button(
+                        "Open source article",
+                        source_url,
+                        key=(
+                            f"final_experiment_source_{evidence_index}_"
+                            f"{evidence.get('library_item_id')}"
+                        ),
+                    )
+
+
 def _render_recommendation_example(example: dict, index: int):
     experiment = example.get("experiment", {})
     title = str(example.get("article_title") or "Untitled article")
@@ -2665,14 +2840,16 @@ def _render_recommendation_example(example: dict, index: int):
 
 
 def _render_experiment_recommendation_results(result: dict):
+    _render_final_experiment(result)
+    st.divider()
     recommendations = result.get("recommendations", [])
-    st.markdown("### Experiments from similar research")
+    st.markdown("### Supporting Experiments from Similar Research")
     render_html(
         """
         <div class="recommendation-baseline-note">
-            Literature retrieval baseline: these are experiments reported in
-            similar Research Cases. The system is not generating a new experiment
-            or claiming that a retrieved experiment is scientifically appropriate.
+            These are source experiments used as evidence for the synthesized
+            protocol above. They remain literature precedents, not additional
+            recommendations.
         </div>
         """
     )
@@ -2852,8 +3029,8 @@ def render_experiment_recommendations(projects):
         <div class="recommendations-hero">
             <div class="recommendations-hero-title">Experiment Recommendations</div>
             <div class="recommendations-hero-caption">
-                Build project-specific Research Cases and retrieve experimental
-                strategies from the most semantically similar literature.
+                Build project-specific Research Cases, retrieve similar experimental
+                strategies, and synthesize one complete next experiment.
             </div>
         </div>
         """
@@ -2953,10 +3130,15 @@ def render_experiment_recommendations(projects):
             disabled=coverage["ready"] == 0,
             type="primary",
             width="stretch",
-            help="Retrieves literature precedents; it does not generate a new experiment.",
+            help=(
+                "Synthesizes one complete experiment from the project context "
+                "and the most relevant Research Cases."
+            ),
         ):
             try:
-                with st.spinner("Matching the project to similar Research Cases..."):
+                with st.spinner(
+                    "Retrieving evidence and synthesizing the next experiment..."
+                ):
                     result = recommend_relevant_experiments(
                         project_id,
                         top_k=int(top_k),
@@ -2995,8 +3177,8 @@ def render_experiment_recommendations(projects):
         _render_experiment_recommendation_results(result)
     else:
         st.info(
-            "Generate the Research Cases, then retrieve experiments reported in "
-            "the most similar articles."
+            "Generate the Research Cases, then synthesize a complete experiment "
+            "from the most similar articles."
         )
 
     _render_research_case_library(project_id, cases)

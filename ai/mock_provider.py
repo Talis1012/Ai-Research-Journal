@@ -25,6 +25,84 @@ Experimentul conține observații importante, iar cercetătorul a notat rezultat
     ) -> Any:
         del json_schema, max_output_tokens
 
+        if "FINAL_EXPERIMENT_SYNTHESIS_REQUEST" in prompt:
+            source_ids = list(dict.fromkeys(
+                int(value)
+                for value in re.findall(
+                    r'"library_item_id":\s*(\d+)',
+                    prompt,
+                )
+            ))
+            return {
+                "title": "Controlled comparison of the candidate method",
+                "objective": (
+                    "Determine whether the candidate method improves the primary "
+                    "outcome under the same evaluation protocol as the baseline."
+                ),
+                "hypothesis": (
+                    "The candidate method will improve the primary outcome over "
+                    "the baseline while all other conditions remain fixed."
+                ),
+                "template_type": "comparative_evaluation",
+                "rationale": (
+                    "The closest Research Cases repeatedly use controlled comparisons."
+                ),
+                "independent_variables": [{
+                    "name": "Method",
+                    "levels": ["Baseline", "Candidate method"],
+                    "rationale": "Isolate the effect of the proposed method.",
+                }],
+                "control_condition": "Baseline method under the shared protocol.",
+                "controlled_variables": ["Dataset", "Evaluation protocol"],
+                "experimental_units": {
+                    "unit": "Independent evaluation run",
+                    "groups": 2,
+                    "replicates_per_group": 5,
+                    "total_units": 10,
+                },
+                "materials_and_setup": [
+                    "Fixed dataset split",
+                    "Baseline and candidate implementations",
+                ],
+                "randomization": "Randomize run order with a recorded seed.",
+                "blinding": "Blind outcome aggregation to method labels where feasible.",
+                "procedure_steps": [
+                    "Freeze the dataset split and evaluation protocol.",
+                    "Run the baseline and candidate under identical conditions.",
+                    "Collect the predefined primary and secondary outcomes.",
+                    "Compare groups using the prespecified analysis.",
+                ],
+                "measurements": [{
+                    "name": "Primary outcome",
+                    "unit": "score",
+                    "timing": "After every evaluation run",
+                    "role": "Primary",
+                }],
+                "duration": "One complete evaluation cycle per replicate.",
+                "analysis_plan": [
+                    "Report group means, dispersion, effect size, and uncertainty.",
+                ],
+                "success_criteria": [
+                    "The candidate improves the prespecified primary outcome.",
+                ],
+                "stop_conditions": [
+                    "Stop if data integrity or protocol consistency cannot be verified.",
+                ],
+                "assumptions": [
+                    "Five replicates per group is an operational default requiring review.",
+                ],
+                "evidence_basis": [
+                    {
+                        "library_item_id": source_id,
+                        "supported_choice": (
+                            "Supports a controlled comparative evaluation design."
+                        ),
+                    }
+                    for source_id in source_ids[:2]
+                ],
+                "confidence": "Medium",
+            }
+
         if "PROJECT_CASE_EXTRACTION_REQUEST" in prompt:
             return {
                 "metadata": {

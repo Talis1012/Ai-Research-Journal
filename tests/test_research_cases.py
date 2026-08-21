@@ -28,6 +28,19 @@ from services.research_case_service import (
 from utils.user_scope import activate_user_scope, clear_user_scope
 
 
+class UntraceableSynthesisProvider(MockProvider):
+    def generate_json(self, prompt, **kwargs):
+        result = super().generate_json(prompt, **kwargs)
+
+        if "FINAL_EXPERIMENT_SYNTHESIS_REQUEST" in prompt:
+            result["evidence_basis"] = [{
+                "library_item_id": 999_999,
+                "supported_choice": "Unsupported source reference.",
+            }]
+
+        return result
+
+
 class ResearchCaseTestCase(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -147,6 +160,27 @@ class ResearchCaseTestCase(unittest.TestCase):
         self.assertEqual(len(recommendation["examples"]), 2)
         self.assertIn("similarity_score", recommendation["examples"][0])
         self.assertIn("top_k_rank", recommendation["examples"][0])
+        final_experiment = result["final_experiment"]
+        self.assertEqual(result["synthesis_error"], "")
+        self.assertEqual(
+            final_experiment["template_type"],
+            "comparative_evaluation",
+        )
+        self.assertTrue(final_experiment["hypothesis"])
+        self.assertEqual(final_experiment["experimental_units"]["total_units"], 10)
+        self.assertTrue(final_experiment["procedure_steps"])
+        self.assertTrue(final_experiment["measurements"])
+        self.assertEqual(len(final_experiment["evidence_basis"]), 2)
+        self.assertEqual(
+            {
+                evidence["library_item_id"]
+                for evidence in final_experiment["evidence_basis"]
+            },
+            {
+                case["library_item_id"]
+                for case in get_project_research_cases(self.project_id)
+            },
+        )
 
     def test_coverage_marks_case_outdated_after_source_changes(self):
         item_id = self._paper(
@@ -188,6 +222,24 @@ class ResearchCaseTestCase(unittest.TestCase):
         self.assertEqual(coverage["ready"], 0)
         self.assertEqual(coverage["outdated"], 1)
         self.assertEqual(coverage["to_process"], 1)
+
+    def test_final_synthesis_rejects_unretrieved_source_references(self):
+        self._paper(
+            "Comparison source",
+            "Two methods are compared using one controlled evaluation protocol.",
+        )
+        provider = UntraceableSynthesisProvider()
+        generate_project_research_cases(
+            self.project_id,
+            ai_provider=provider,
+        )
+        result = recommend_relevant_experiments(
+            self.project_id,
+            ai_provider=provider,
+        )
+
+        self.assertIsNone(result["final_experiment"])
+        self.assertIn("valid retrieved Research Case", result["synthesis_error"])
 
     def test_missing_article_evidence_is_recorded_as_failed(self):
         item_id = self._paper("Metadata-only paper", "")
