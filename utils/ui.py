@@ -288,50 +288,96 @@ def render_html(markup: str):
     st.html(dedent(str(markup)).strip())
 
 
-def _escaped_toast_markdown(value: str) -> str:
-    escaped = str(value or "")
-
-    for character in ("\\", "*", "_", "[", "]", "`", "#", ">", "|"):
-        escaped = escaped.replace(character, f"\\{character}")
-
-    return escaped
+_REMINDER_NOTIFICATION_LIFETIME_SECONDS = 20
+_MAX_VISIBLE_REMINDER_NOTIFICATIONS = 3
 
 
-@st.fragment(run_every="10s")
+def _render_reminder_notification_popups(notifications: list[dict]):
+    if not notifications:
+        return
+
+    items = "".join(
+        f"""
+        <div class="reminder-notification-popup" role="alert">
+            <div class="reminder-notification-icon" aria-hidden="true">!</div>
+            <div class="reminder-notification-content">
+                <div class="reminder-notification-title">
+                    {safe_html(item['title'])}
+                </div>
+                <time class="reminder-notification-time">
+                    {safe_html(item['time'])}
+                </time>
+            </div>
+        </div>
+        """
+        for item in notifications
+    )
+    render_html(
+        f"""
+        <div class="reminder-notification-stack"
+             aria-label="Notificări pentru remindere">
+            {items}
+        </div>
+        """
+    )
+
+
+@st.fragment(run_every="5s")
 @authenticated_callback
 def render_due_reminder_notifications():
     """Show newly due reminders while any authenticated app page is open."""
     from db.calendar_queries import (
         get_due_calendar_reminders,
+        get_recent_calendar_reminder_notifications,
         mark_calendar_reminder_notified,
     )
     from db.database import DatabaseUndefinedTableError
 
     now = utc_now()
-
     try:
-        due_reminders = get_due_calendar_reminders(
-            now,
-            since=now - timedelta(days=1),
-            limit=3,
+        active_reminders = get_recent_calendar_reminder_notifications(
+            now - timedelta(seconds=_REMINDER_NOTIFICATION_LIFETIME_SECONDS),
+            limit=_MAX_VISIBLE_REMINDER_NOTIFICATIONS,
         )
     except DatabaseUndefinedTableError:
         # A freshly deployed app can briefly run before its database migration.
-        # Notifications resume automatically as soon as the table exists.
         return
 
+    active_notifications = [
+        {
+            "title": str(reminder["title"]),
+            "time": to_user_datetime(reminder["reminder_at"]).strftime("%H:%M"),
+        }
+        for reminder in active_reminders
+    ]
+    available_slots = (
+        _MAX_VISIBLE_REMINDER_NOTIFICATIONS - len(active_notifications)
+    )
+
+    if available_slots:
+        try:
+            due_reminders = get_due_calendar_reminders(
+                now,
+                limit=available_slots,
+            )
+        except DatabaseUndefinedTableError:
+            due_reminders = []
+    else:
+        due_reminders = []
+
     for reminder in due_reminders:
+        reminder_at = to_user_datetime(reminder["reminder_at"])
+        notification = {
+            "title": str(reminder["title"]),
+            "time": reminder_at.strftime("%H:%M"),
+        }
+
         if not mark_calendar_reminder_notified(reminder["id"]):
             continue
 
-        reminder_at = to_user_datetime(reminder["reminder_at"])
+        active_notifications.append(notification)
 
-        st.toast(
-            f"**{_escaped_toast_markdown(reminder['title'])}**  \n"
-            f"{reminder_at.strftime('%H:%M')}",
-            icon=":material/priority_high:",
-            duration="long",
-        )
+    _render_reminder_notification_popups(active_notifications)
 
 
 def compact_date(value: str | None) -> str:
@@ -610,40 +656,68 @@ def load_css():
             border: 2px solid #ffffff;
         }
 
-        [data-testid="stToastContainer"] {
-            top: auto !important;
-            right: auto !important;
-            bottom: 24px !important;
-            left: 24px !important;
-            z-index: 10000 !important;
+        .reminder-notification-stack {
+            position: fixed;
+            left: 24px;
+            bottom: 24px;
+            z-index: 10000;
+            width: min(360px, calc(100vw - 48px));
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
         }
 
-        [data-testid="stToast"] {
-            width: min(340px, calc(100vw - 48px)) !important;
-            min-height: 82px !important;
-            padding: 16px 18px !important;
-            gap: 15px !important;
-            border: 1px solid #c9dcf7 !important;
-            border-radius: 12px !important;
-            background: #ffffff !important;
-            color: #101828 !important;
-            filter: none !important;
-            box-shadow: 0 18px 44px rgba(23, 105, 210, 0.2) !important;
+        .reminder-notification-popup {
+            min-height: 82px;
+            display: grid;
+            grid-template-columns: 42px minmax(0, 1fr);
+            align-items: center;
+            gap: 15px;
+            padding: 15px 18px;
+            border: 1px solid #c9dcf7;
+            border-radius: 12px;
+            background: #ffffff;
+            color: #101828;
+            box-shadow: 0 18px 44px rgba(23, 105, 210, 0.2);
         }
 
-        [data-testid="stToastDynamicIcon"] {
-            color: #1769d2 !important;
-            font-size: 2.15rem !important;
-            line-height: 1 !important;
-            flex: 0 0 auto !important;
+        .reminder-notification-icon {
+            color: #1769d2;
+            font-size: 2.45rem;
+            font-weight: 900;
+            line-height: 1;
+            text-align: center;
         }
 
-        [data-testid="stToast"] strong {
-            display: inline-block;
+        .reminder-notification-content {
+            min-width: 0;
+        }
+
+        .reminder-notification-title {
+            overflow-wrap: anywhere;
             color: #101828;
             font-size: 0.94rem;
             font-weight: 850;
-            margin-bottom: 4px;
+            line-height: 1.35;
+        }
+
+        .reminder-notification-time {
+            display: block;
+            margin-top: 4px;
+            color: #475467;
+            font-size: 0.82rem;
+            font-weight: 650;
+            line-height: 1.25;
+        }
+
+        @media (max-width: 640px) {
+            .reminder-notification-stack {
+                left: 16px;
+                right: 16px;
+                bottom: 16px;
+                width: auto;
+            }
         }
 
         .user-chip {

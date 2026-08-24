@@ -10,6 +10,7 @@ from db.calendar_queries import (
     get_calendar_reminder,
     get_calendar_reminders,
     get_due_calendar_reminders,
+    get_recent_calendar_reminder_notifications,
     get_upcoming_calendar_reminders,
     mark_calendar_reminder_notified,
     set_calendar_reminder_completed,
@@ -75,6 +76,10 @@ class CalendarTestCase(unittest.TestCase):
         self.assertEqual([row["id"] for row in due], [reminder_id])
         self.assertTrue(mark_calendar_reminder_notified(reminder_id))
         self.assertEqual(get_due_calendar_reminders(now), [])
+        recent = get_recent_calendar_reminder_notifications(
+            datetime.now(timezone.utc) - timedelta(minutes=1)
+        )
+        self.assertEqual([row["id"] for row in recent], [reminder_id])
 
         self.assertTrue(set_calendar_reminder_completed(reminder_id, True))
         self.assertEqual(get_upcoming_calendar_reminders(now - timedelta(days=1)), [])

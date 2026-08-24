@@ -166,6 +166,35 @@ def get_due_calendar_reminders(
     return [dict(row) for row in rows]
 
 
+def get_recent_calendar_reminder_notifications(
+    since: datetime,
+    *,
+    limit: int = 3,
+):
+    conn = get_connection()
+
+    try:
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM calendar_reminders
+            WHERE completed = 0
+              AND notified_at IS NOT NULL
+              AND notified_at >= ?
+            ORDER BY notified_at DESC, id DESC
+            LIMIT ?
+            """,
+            (
+                _normalized_datetime(since),
+                max(1, min(int(limit), 20)),
+            ),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    return [dict(row) for row in reversed(rows)]
+
+
 def set_calendar_reminder_completed(reminder_id: int, completed: bool) -> bool:
     completed_value = 1 if completed else 0
     conn = get_connection()

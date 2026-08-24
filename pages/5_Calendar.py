@@ -82,14 +82,9 @@ def matching_date_in_month(value: date, day_number: int) -> date:
     return value.replace(day=min(max(1, int(day_number)), last_day))
 
 
-def next_quarter_hour(value: datetime) -> time:
+def next_minute(value: datetime) -> time:
     rounded = value.replace(second=0, microsecond=0)
-    minutes_to_add = (15 - rounded.minute % 15) % 15
-
-    if minutes_to_add == 0:
-        minutes_to_add = 15
-
-    return (rounded + timedelta(minutes=minutes_to_add)).time()
+    return (rounded + timedelta(minutes=1)).time()
 
 
 def formatted_long_date(value: date) -> str:
@@ -448,8 +443,8 @@ def render_new_reminder_dialog(default_date: date):
         with time_col:
             reminder_time = st.time_input(
                 "Ora",
-                value=next_quarter_hour(user_now()),
-                step=900,
+                value=next_minute(user_now()),
+                step=60,
             )
 
         notes = st.text_area(
