@@ -61,11 +61,15 @@ def create_calendar_reminder(
 
 def get_calendar_reminder(reminder_id: int):
     conn = get_connection()
-    row = conn.execute(
-        "SELECT * FROM calendar_reminders WHERE id = ?",
-        (int(reminder_id),),
-    ).fetchone()
-    conn.close()
+
+    try:
+        row = conn.execute(
+            "SELECT * FROM calendar_reminders WHERE id = ?",
+            (int(reminder_id),),
+        ).fetchone()
+    finally:
+        conn.close()
+
     return dict(row) if row is not None else None
 
 
@@ -77,32 +81,40 @@ def get_calendar_reminders(start_at: datetime, end_at: datetime):
         raise ValueError("Calendar range end must be after its start.")
 
     conn = get_connection()
-    rows = conn.execute(
-        """
-        SELECT *
-        FROM calendar_reminders
-        WHERE reminder_at >= ? AND reminder_at < ?
-        ORDER BY reminder_at ASC, id ASC
-        """,
-        (start_value, end_value),
-    ).fetchall()
-    conn.close()
+
+    try:
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM calendar_reminders
+            WHERE reminder_at >= ? AND reminder_at < ?
+            ORDER BY reminder_at ASC, id ASC
+            """,
+            (start_value, end_value),
+        ).fetchall()
+    finally:
+        conn.close()
+
     return [dict(row) for row in rows]
 
 
 def get_upcoming_calendar_reminders(now: datetime, limit: int = 8):
     conn = get_connection()
-    rows = conn.execute(
-        """
-        SELECT *
-        FROM calendar_reminders
-        WHERE completed = 0 AND reminder_at >= ?
-        ORDER BY reminder_at ASC, id ASC
-        LIMIT ?
-        """,
-        (_normalized_datetime(now), max(1, min(int(limit), 50))),
-    ).fetchall()
-    conn.close()
+
+    try:
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM calendar_reminders
+            WHERE completed = 0 AND reminder_at >= ?
+            ORDER BY reminder_at ASC, id ASC
+            LIMIT ?
+            """,
+            (_normalized_datetime(now), max(1, min(int(limit), 50))),
+        ).fetchall()
+    finally:
+        conn.close()
+
     return [dict(row) for row in rows]
 
 
@@ -121,20 +133,24 @@ def get_due_calendar_reminders(
 
     params.append(max(1, min(int(limit), 20)))
     conn = get_connection()
-    rows = conn.execute(
-        f"""
-        SELECT *
-        FROM calendar_reminders
-        WHERE completed = 0
-          AND notified_at IS NULL
-          AND reminder_at <= ?
-          {since_clause}
-        ORDER BY reminder_at ASC, id ASC
-        LIMIT ?
-        """,
-        tuple(params),
-    ).fetchall()
-    conn.close()
+
+    try:
+        rows = conn.execute(
+            f"""
+            SELECT *
+            FROM calendar_reminders
+            WHERE completed = 0
+              AND notified_at IS NULL
+              AND reminder_at <= ?
+              {since_clause}
+            ORDER BY reminder_at ASC, id ASC
+            LIMIT ?
+            """,
+            tuple(params),
+        ).fetchall()
+    finally:
+        conn.close()
+
     return [dict(row) for row in rows]
 
 

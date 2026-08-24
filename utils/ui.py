@@ -306,13 +306,20 @@ def render_due_reminder_notifications():
         get_due_calendar_reminders,
         mark_calendar_reminder_notified,
     )
+    from db.database import DatabaseUndefinedTableError
 
     now = datetime.now()
-    due_reminders = get_due_calendar_reminders(
-        now,
-        since=now - timedelta(days=1),
-        limit=3,
-    )
+
+    try:
+        due_reminders = get_due_calendar_reminders(
+            now,
+            since=now - timedelta(days=1),
+            limit=3,
+        )
+    except DatabaseUndefinedTableError:
+        # A freshly deployed app can briefly run before its database migration.
+        # Notifications resume automatically as soon as the table exists.
+        return
 
     for reminder in due_reminders:
         if not mark_calendar_reminder_notified(reminder["id"]):

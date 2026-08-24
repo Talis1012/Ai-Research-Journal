@@ -29,6 +29,11 @@ DatabaseIntegrityError = (
     if psycopg is not None
     else (sqlite3.IntegrityError,)
 )
+DatabaseUndefinedTableError = (
+    (psycopg.errors.UndefinedTable,)
+    if psycopg is not None
+    else ()
+)
 
 
 load_dotenv()

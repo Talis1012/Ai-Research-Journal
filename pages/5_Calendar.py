@@ -11,7 +11,7 @@ from db.calendar_queries import (
     get_upcoming_calendar_reminders,
     set_calendar_reminder_completed,
 )
-from db.database import init_db_once
+from db.database import DatabaseUndefinedTableError, init_db_once
 from utils.auth import require_auth
 from utils.query_cache import cached_read
 from utils.ui import (
@@ -576,21 +576,28 @@ except (TypeError, ValueError):
     st.session_state["calendar_selected_date"] = selected_date.isoformat()
 
 next_month = shifted_month(active_month, 1)
-month_reminders = cached_read(
-    get_calendar_reminders,
-    datetime.combine(active_month, time.min),
-    datetime.combine(next_month, time.min),
-)
+calendar_schema_ready = True
+
+try:
+    month_reminders = cached_read(
+        get_calendar_reminders,
+        datetime.combine(active_month, time.min),
+        datetime.combine(next_month, time.min),
+    )
+    upcoming_reminders = cached_read(
+        get_upcoming_calendar_reminders,
+        datetime.now().replace(second=0, microsecond=0),
+        8,
+    )
+except DatabaseUndefinedTableError:
+    calendar_schema_ready = False
+    month_reminders = []
+    upcoming_reminders = []
+
 reminders_by_date: dict[date, list[dict]] = defaultdict(list)
 
 for reminder in month_reminders:
     reminders_by_date[reminder_datetime(reminder["reminder_at"]).date()].append(reminder)
-
-upcoming_reminders = cached_read(
-    get_upcoming_calendar_reminders,
-    datetime.now().replace(second=0, microsecond=0),
-    8,
-)
 
 top_brand_col, top_context_col, top_space_col, top_user_col = st.columns(
     [1.25, 2.8, 1.9, 1.65],
@@ -637,7 +644,7 @@ with page_col:
         )
 
     with action_col:
-        if st.button(
+        if calendar_schema_ready and st.button(
             "Reminder nou",
             icon=":material/add_alarm:",
             type="primary",
@@ -645,6 +652,13 @@ with page_col:
             key="calendar_new_reminder_header",
         ):
             render_new_reminder_dialog(selected_date)
+
+    if not calendar_schema_ready:
+        st.error(
+            "Calendarul așteaptă actualizarea bazei de date. "
+            "Aplică migrarea Supabase și reîncarcă pagina."
+        )
+        st.stop()
 
     calendar_col, side_col = st.columns([3.65, 1.45], gap="small")
 
