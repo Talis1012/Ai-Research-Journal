@@ -12,7 +12,7 @@ from db.calendar_queries import (
     set_calendar_reminder_completed,
 )
 from db.database import DatabaseUndefinedTableError, init_db_once
-from utils.auth import require_auth
+from utils.auth import authenticated_callback, require_auth
 from utils.query_cache import cached_read
 from utils.timezone import (
     local_datetime_to_utc,
@@ -418,6 +418,7 @@ def render_page_css():
 
 
 @st.dialog("Reminder nou", width="small")
+@authenticated_callback
 def render_new_reminder_dialog(default_date: date):
     timezone_name = user_timezone_name()
     render_html(
