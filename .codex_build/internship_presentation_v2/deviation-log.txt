@@ -1,0 +1,14 @@
+The source deck is itself a code-generated, slide-local design with no reusable
+content master beyond the blank PowerPoint layout. The exact original builder
+was therefore reused as the editing surface instead of reconstructing the deck
+from a generic theme. Geometry, palette, typography, footer system, section
+order and composition patterns remain inherited from the source deck.
+
+Bounded deviations requested by the user:
+- All seven ui_mockups images were removed and replaced with screenshots from
+  the real application running locally with an isolated temporary data set.
+- Slide 13 changes from a five-card retrieval-only diagram to the established
+  screenshot-plus-technical-explanation composition because the current code
+  now synthesizes a complete next experiment.
+- Chronology, repository metrics, test count and sources were refreshed.
+- Functional slides include concise module-level implementation paths.

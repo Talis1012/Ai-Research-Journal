@@ -1,0 +1,1353 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/kwuafp",
+    "id": "kwuafp",
+    "slide": 12,
+    "layoutId": "612efd06-7947-4d31-99ca-d968622bc687",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "19af04e2-e039-4f8b-9f1d-e5d3aae014d9",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#FFFFFF",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "+mn-lt"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "612efd06-7947-4d31-99ca-d968622bc687",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "19af04e2-e039-4f8b-9f1d-e5d3aae014d9",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "19af04e2-e039-4f8b-9f1d-e5d3aae014d9",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0jaxsnyt",
+      "id": "1",
+      "name": "kicker-12",
+      "bbox": [
+        48,
+        34,
+        460,
+        24
+      ],
+      "geometry": "rect",
+      "text": "ETAPA 6 · 29 IULIE–06 AUGUST",
+      "textPreview": "ETAPA 6 · 29 IULIE–06 AUGUST",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 14,
+        "typeface": "+mn-lt",
+        "color": "#1769D2",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "ETAPA 6 · 29 IULIE–06 AUGUST"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "ETAPA 6 · 29 IULIE–06 AUGUST",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "color": "#1769D2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "ETAPA 6 · 29 IULIE–06 AUGUST",
+              "fontSize": 14,
+              "color": "#1769D2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/zi1gjih8",
+      "id": "2",
+      "name": "title-12",
+      "bbox": [
+        48,
+        70,
+        1184,
+        70
+      ],
+      "geometry": "rect",
+      "text": "Cloud-ul a fost construit în jurul izolării datelor",
+      "textPreview": "Cloud-ul a fost construit în jurul izolării datelor",
+      "resolvedFontSize": 42,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 42,
+        "typeface": "+mn-lt",
+        "color": "#101828",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Cloud-ul a fost construit în jurul izolării datelor"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Cloud-ul a fost construit în jurul izolării datelor",
+          "resolvedTextStyle": {
+            "fontSize": 42,
+            "color": "#101828",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Cloud-ul a fost construit în jurul izolării datelor",
+              "fontSize": 42,
+              "color": "#101828",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/yhsfqdgn",
+      "id": "3",
+      "bbox": [
+        48,
+        145,
+        1184,
+        1
+      ],
+      "geometry": "rect",
+      "fillColor": "#D0D5DD",
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/dgjyhszi",
+      "id": "4",
+      "bbox": [
+        326,
+        314,
+        96,
+        0
+      ],
+      "geometry": "straightConnector1",
+      "lineColor": "#1769D2",
+      "lineWidth": 3
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/cfaxonyx",
+      "id": "5",
+      "bbox": [
+        742,
+        314,
+        96,
+        0
+      ],
+      "geometry": "straightConnector1",
+      "lineColor": "#1769D2",
+      "lineWidth": 3
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/be1gfihc",
+      "id": "6",
+      "bbox": [
+        48,
+        220,
+        278,
+        190
+      ],
+      "geometry": "rect",
+      "fillColor": "#F7F8FA",
+      "lineColor": "#D0D5DD",
+      "lineWidth": 1
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/qdsfmdgr",
+      "id": "7",
+      "bbox": [
+        70,
+        253,
+        234,
+        36
+      ],
+      "geometry": "rect",
+      "text": "Auth0 / OIDC",
+      "textPreview": "Auth0 / OIDC",
+      "resolvedFontSize": 25,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 25,
+        "typeface": "+mn-lt",
+        "color": "#101828",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Auth0 / OIDC"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Auth0 / OIDC",
+          "resolvedTextStyle": {
+            "fontSize": 25,
+            "color": "#101828",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Auth0 / OIDC",
+              "fontSize": 25,
+              "color": "#101828",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/pcjed8z6",
+      "id": "8",
+      "bbox": [
+        70,
+        313,
+        234,
+        78
+      ],
+      "geometry": "rect",
+      "text": "iss + sub verificate\nrol authenticated\nsesiune Streamlit",
+      "textPreview": "iss + sub verificate | rol authenticated | sesiune Streamlit",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 17,
+        "typeface": "+mn-lt",
+        "color": "#667085",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "iss + sub verificate"
+          },
+          {
+            "index": 2,
+            "text": "rol authenticated"
+          },
+          {
+            "index": 3,
+            "text": "sesiune Streamlit"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "iss + sub verificate",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "color": "#667085",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "iss + sub verificate",
+              "fontSize": 17,
+              "color": "#667085",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 2,
+          "text": "rol authenticated",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "color": "#667085",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "rol authenticated",
+              "fontSize": 17,
+              "color": "#667085",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 3,
+          "text": "sesiune Streamlit",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "color": "#667085",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "sesiune Streamlit",
+              "fontSize": 17,
+              "color": "#667085",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/obqxk3yl",
+      "id": "9",
+      "bbox": [
+        422,
+        220,
+        320,
+        190
+      ],
+      "geometry": "rect",
+      "fillColor": "#F7F8FA",
+      "lineColor": "#D0D5DD",
+      "lineWidth": 1
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/m5s3els3",
+      "id": "10",
+      "bbox": [
+        444,
+        253,
+        276,
+        36
+      ],
+      "geometry": "rect",
+      "text": "Aplicația Streamlit",
+      "textPreview": "Aplicația Streamlit",
+      "resolvedFontSize": 25,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 25,
+        "typeface": "+mn-lt",
+        "color": "#101828",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Aplicația Streamlit"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Aplicația Streamlit",
+          "resolvedTextStyle": {
+            "fontSize": 25,
+            "color": "#101828",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Aplicația Streamlit",
+              "fontSize": 25,
+              "color": "#101828",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/nq1knq9o",
+      "id": "11",
+      "bbox": [
+        444,
+        313,
+        276,
+        78
+      ],
+      "geometry": "rect",
+      "text": "scope privat per utilizator\nservicii + query layer\nID token server-side",
+      "textPreview": "scope privat per utilizator | servicii + query layer | ID token server-side",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 17,
+        "typeface": "+mn-lt",
+        "color": "#667085",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "scope privat per utilizator"
+          },
+          {
+            "index": 2,
+            "text": "servicii + query layer"
+          },
+          {
+            "index": 3,
+            "text": "ID token server-side"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "scope privat per utilizator",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "color": "#667085",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "scope privat per utilizator",
+              "fontSize": 17,
+              "color": "#667085",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 2,
+          "text": "servicii + query layer",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "color": "#667085",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "servicii + query layer",
+              "fontSize": 17,
+              "color": "#667085",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 3,
+          "text": "ID token server-side",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "color": "#667085",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "ID token server-side",
+              "fontSize": 17,
+              "color": "#667085",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/8ralgba9",
+      "id": "12",
+      "bbox": [
+        838,
+        220,
+        394,
+        190
+      ],
+      "geometry": "rect",
+      "fillColor": "#EAF3FF",
+      "lineColor": "#1769D2",
+      "lineWidth": 1
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/9sj2pgru",
+      "id": "13",
+      "bbox": [
+        860,
+        253,
+        350,
+        36
+      ],
+      "geometry": "rect",
+      "text": "Supabase",
+      "textPreview": "Supabase",
+      "resolvedFontSize": 25,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 25,
+        "typeface": "+mn-lt",
+        "color": "#101828",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Supabase"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Supabase",
+          "resolvedTextStyle": {
+            "fontSize": 25,
+            "color": "#101828",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Supabase",
+              "fontSize": 25,
+              "color": "#101828",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/y183a1s7",
+      "id": "14",
+      "bbox": [
+        860,
+        313,
+        350,
+        78
+      ],
+      "geometry": "rect",
+      "text": "PostgreSQL + RLS forțat\nStorage privat în users/<uuid>/…\nștergere completă workspace",
+      "textPreview": "PostgreSQL + RLS forțat | Storage privat în users/<uuid>/… | ștergere completă workspace",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 17,
+        "typeface": "+mn-lt",
+        "color": "#667085",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "PostgreSQL + RLS forțat"
+          },
+          {
+            "index": 2,
+            "text": "Storage privat în users/<uuid>/…"
+          },
+          {
+            "index": 3,
+            "text": "ștergere completă workspace"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "PostgreSQL + RLS forțat",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "color": "#667085",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "PostgreSQL + RLS forțat",
+              "fontSize": 17,
+              "color": "#667085",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 2,
+          "text": "Storage privat în users/<uuid>/…",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "color": "#667085",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Storage privat în users/<uuid>/…",
+              "fontSize": 17,
+              "color": "#667085",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 3,
+          "text": "ștergere completă workspace",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "color": "#667085",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "ștergere completă workspace",
+              "fontSize": 17,
+              "color": "#667085",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/z2hkj69s",
+      "id": "15",
+      "bbox": [
+        48,
+        458,
+        1184,
+        1
+      ],
+      "geometry": "rect",
+      "fillColor": "#D0D5DD",
+      "lineWidth": 0
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/03alcbad",
+      "id": "16",
+      "bbox": [
+        48,
+        500,
+        350,
+        28
+      ],
+      "geometry": "rect",
+      "text": "RLS + prefix privat",
+      "textPreview": "RLS + prefix privat",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 20,
+        "typeface": "+mn-lt",
+        "color": "#0D57B7",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "RLS + prefix privat"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "RLS + prefix privat",
+          "resolvedTextStyle": {
+            "fontSize": 20,
+            "color": "#0D57B7",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "RLS + prefix privat",
+              "fontSize": 20,
+              "color": "#0D57B7",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 17,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/l4j2lgri",
+      "id": "17",
+      "bbox": [
+        48,
+        540,
+        350,
+        56
+      ],
+      "geometry": "rect",
+      "text": "Aceeași identitate controlează rândurile și obiectele Storage.",
+      "textPreview": "Aceeași identitate controlează rândurile și obiectele Storage.",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "+mn-lt",
+        "color": "#667085",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Aceeași identitate controlează rândurile și"
+          },
+          {
+            "index": 2,
+            "text": "obiectele Storage."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Aceeași identitate controlează rândurile și obiectele Storage.",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "color": "#667085",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Aceeași identitate controlează rândurile și obiectele Storage.",
+              "fontSize": 16,
+              "color": "#667085",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 18,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/qx8j61sv",
+      "id": "18",
+      "bbox": [
+        442,
+        500,
+        350,
+        28
+      ],
+      "geometry": "rect",
+      "text": "Rate & concurrency limits",
+      "textPreview": "Rate & concurrency limits",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 20,
+        "typeface": "+mn-lt",
+        "color": "#0D57B7",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Rate & concurrency limits"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Rate & concurrency limits",
+          "resolvedTextStyle": {
+            "fontSize": 20,
+            "color": "#0D57B7",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Rate & concurrency limits",
+              "fontSize": 20,
+              "color": "#0D57B7",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 19,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/byhkf69g",
+      "id": "19",
+      "bbox": [
+        442,
+        540,
+        350,
+        56
+      ],
+      "geometry": "rect",
+      "text": "Cote pentru Gemini, OpenAlex, transcriere și spațiu.",
+      "textPreview": "Cote pentru Gemini, OpenAlex, transcriere și spațiu.",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "+mn-lt",
+        "color": "#667085",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Cote pentru Gemini, OpenAlex, transcriere și"
+          },
+          {
+            "index": 2,
+            "text": "spațiu."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Cote pentru Gemini, OpenAlex, transcriere și spațiu.",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "color": "#667085",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Cote pentru Gemini, OpenAlex, transcriere și spațiu.",
+              "fontSize": 16,
+              "color": "#667085",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 20,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/f2d0n2p8",
+      "id": "20",
+      "bbox": [
+        836,
+        500,
+        350,
+        28
+      ],
+      "geometry": "rect",
+      "text": "Cache + pipeline DB",
+      "textPreview": "Cache + pipeline DB",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 20,
+        "typeface": "+mn-lt",
+        "color": "#0D57B7",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Cache + pipeline DB"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Cache + pipeline DB",
+          "resolvedTextStyle": {
+            "fontSize": 20,
+            "color": "#0D57B7",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Cache + pipeline DB",
+              "fontSize": 20,
+              "color": "#0D57B7",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 21,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/e14zex8n",
+      "id": "21",
+      "bbox": [
+        836,
+        540,
+        350,
+        56
+      ],
+      "geometry": "rect",
+      "text": "Invalidare selectivă, conexiuni reutilizate și mai puține round-trip-uri.",
+      "textPreview": "Invalidare selectivă, conexiuni reutilizate și mai puține round-trip-uri.",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "+mn-lt",
+        "color": "#667085",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Invalidare selectivă, conexiuni reutilizate și"
+          },
+          {
+            "index": 2,
+            "text": "mai puține round-trip-uri."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Invalidare selectivă, conexiuni reutilizate și mai puține round-trip-uri.",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "color": "#667085",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Invalidare selectivă, conexiuni reutilizate și mai puține round-trip-uri.",
+              "fontSize": 16,
+              "color": "#667085",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 22,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/14fips7e",
+      "id": "22",
+      "name": "footer-12",
+      "bbox": [
+        48,
+        674,
+        960,
+        18
+      ],
+      "geometry": "rect",
+      "text": "Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 6",
+      "textPreview": "Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 6",
+      "resolvedFontSize": 12,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 12,
+        "typeface": "+mn-lt",
+        "color": "#667085",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 6"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 6",
+          "resolvedTextStyle": {
+            "fontSize": 12,
+            "color": "#667085",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 6",
+              "fontSize": 12,
+              "color": "#667085",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 23,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/g3mhg7qt",
+      "id": "23",
+      "name": "slide-number-12",
+      "bbox": [
+        1170,
+        670,
+        62,
+        22
+      ],
+      "geometry": "rect",
+      "text": "12",
+      "textPreview": "12",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 14,
+        "typeface": "+mn-lt",
+        "color": "#101828",
+        "bold": true,
+        "alignment": "right",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "12"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "12",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "color": "#101828",
+            "bold": true,
+            "alignment": "right"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "12",
+              "fontSize": 14,
+              "color": "#101828",
+              "bold": true,
+              "alignment": "right"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

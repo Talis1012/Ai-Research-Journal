@@ -1,0 +1,22 @@
+SOURCE DECK: Research_Journal_AI_Prezentare_Internship.pptx
+SLIDES REVIEWED: 15/15, individually at full size.
+
+Visual system retained
+- 16:9 canvas (1280 × 720), white background.
+- Calibri/Calibri Light typography; navy body text, cobalt accent, pale-blue panels.
+- Uppercase blue kicker, large left-aligned title, fine gray divider, compact footer and slide number.
+- Functional slides use a 50/50 or 55/45 screenshot-and-explanation composition.
+- Architecture/timeline slides use flat cards, connectors, and restrained color.
+
+Source-slide inventory
+01 cover with screenshot; 02 problem framing; 03 July timeline; 04 August timeline;
+05 architecture; 06 Experiments; 07 Insights; 08 Library; 09 Discovery;
+10 Paper Writing; 11 Data Analysis; 12 cloud/security; 13 Research Cases;
+14 engineering evidence; 15 conclusion.
+
+Required edits
+- Replace every ui_mockups asset on slides 01, 06, 07, 08, 09, 10 and 11.
+- Use only captures from the running Streamlit application.
+- Add visible implementation details to each functionality slide.
+- Update Research Cases to the current complete-experiment synthesis flow.
+- Refresh dates, repository metrics, test count and speaker-note sources.

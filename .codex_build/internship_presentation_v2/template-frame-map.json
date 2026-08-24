@@ -1,0 +1,20 @@
+{
+  "sourceDeck": "Research_Journal_AI_Prezentare_Internship.pptx",
+  "outputSlides": [
+    {"outputSlide":1,"sourceSlide":1,"reuseMode":"duplicate-slide","narrativeRole":"cover with real product screenshot","editTargets":["im/kr6xgnu5"]},
+    {"outputSlide":2,"sourceSlide":2,"reuseMode":"duplicate-slide","narrativeRole":"problem framing","editTargets":["sh/hcvy14ne","sh/9072xkry"]},
+    {"outputSlide":3,"sourceSlide":3,"reuseMode":"duplicate-slide","narrativeRole":"July chronology","editTargets":["sh/6d0fytg3","sh/cza94vmx"]},
+    {"outputSlide":4,"sourceSlide":4,"reuseMode":"duplicate-slide","narrativeRole":"August chronology through final recommendation","editTargets":["sh/1wbapc7q","sh/1cj2d8b6"]},
+    {"outputSlide":5,"sourceSlide":5,"reuseMode":"duplicate-slide","narrativeRole":"final architecture","editTargets":["sh/kny587i9","sh/dgbulwnm"]},
+    {"outputSlide":6,"sourceSlide":6,"reuseMode":"duplicate-slide","narrativeRole":"Experiments functionality and implementation","editTargets":["sh/dcnm98zm","sh/yhg7epsj","im/1cfql0ra"]},
+    {"outputSlide":7,"sourceSlide":7,"reuseMode":"duplicate-slide","narrativeRole":"Insights functionality and implementation","editTargets":["sh/id4ju1oz","sh/cb2tkvap","im/gb25wj6t"]},
+    {"outputSlide":8,"sourceSlide":8,"reuseMode":"duplicate-slide","narrativeRole":"Library functionality and implementation","editTargets":["sh/lgbepgvm","sh/18byd4zy","im/yp8rix47"]},
+    {"outputSlide":9,"sourceSlide":9,"reuseMode":"duplicate-slide","narrativeRole":"Discovery functionality and implementation","editTargets":["sh/lsn2h4fa","sh/1cfmhgne","im/md47elwz"]},
+    {"outputSlide":10,"sourceSlide":10,"reuseMode":"duplicate-slide","narrativeRole":"Paper Writing functionality and implementation","editTargets":["sh/xwnupgvy","sh/xc3mho32","im/nidcv6po"]},
+    {"outputSlide":11,"sourceSlide":11,"reuseMode":"duplicate-slide","narrativeRole":"Data Analysis functionality and implementation","editTargets":["sh/tsnip0ny","sh/xcryxg7y","im/jet8va5c"]},
+    {"outputSlide":12,"sourceSlide":12,"reuseMode":"duplicate-slide","narrativeRole":"cloud security and performance","editTargets":["sh/tgrm1wzy","sh/1gbm9s3a"]},
+    {"outputSlide":13,"sourceSlide":13,"reuseMode":"duplicate-slide","narrativeRole":"Research Cases and complete next-experiment synthesis","editTargets":["sh/4re1o3ed","sh/q50nydsj"]},
+    {"outputSlide":14,"sourceSlide":14,"reuseMode":"duplicate-slide","narrativeRole":"updated engineering evidence","editTargets":["sh/atg3idk7","sh/xc7eds76"]},
+    {"outputSlide":15,"sourceSlide":15,"reuseMode":"duplicate-slide","narrativeRole":"closing synthesis","editTargets":["sh/uh4v2pkj","sh/vixcvu14"]}
+  ]
+}

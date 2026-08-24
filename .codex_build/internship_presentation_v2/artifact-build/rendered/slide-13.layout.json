@@ -1,0 +1,967 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/ph2zsn",
+    "id": "ph2zsn",
+    "slide": 13,
+    "layoutId": "612efd06-7947-4d31-99ca-d968622bc687",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "19af04e2-e039-4f8b-9f1d-e5d3aae014d9",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#FFFFFF",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "+mn-lt"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "612efd06-7947-4d31-99ca-d968622bc687",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "19af04e2-e039-4f8b-9f1d-e5d3aae014d9",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "19af04e2-e039-4f8b-9f1d-e5d3aae014d9",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/lozqd0ji",
+      "id": "1",
+      "name": "kicker-13",
+      "bbox": [
+        48,
+        34,
+        460,
+        24
+      ],
+      "geometry": "rect",
+      "text": "ETAPA 7 · 19–21 AUGUST",
+      "textPreview": "ETAPA 7 · 19–21 AUGUST",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 14,
+        "typeface": "+mn-lt",
+        "color": "#1769D2",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "ETAPA 7 · 19–21 AUGUST"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "ETAPA 7 · 19–21 AUGUST",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "color": "#1769D2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "ETAPA 7 · 19–21 AUGUST",
+              "fontSize": 14,
+              "color": "#1769D2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ylo7ilkr",
+      "id": "2",
+      "name": "title-13",
+      "bbox": [
+        48,
+        70,
+        1184,
+        70
+      ],
+      "geometry": "rect",
+      "text": "Research Cases propune următorul experiment trasabil",
+      "textPreview": "Research Cases propune următorul experiment trasabil",
+      "resolvedFontSize": 39,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 39,
+        "typeface": "+mn-lt",
+        "color": "#101828",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Research Cases propune următorul experiment trasabil"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Research Cases propune următorul experiment trasabil",
+          "resolvedTextStyle": {
+            "fontSize": 39,
+            "color": "#101828",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Research Cases propune următorul experiment trasabil",
+              "fontSize": 39,
+              "color": "#101828",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/zmhobq1c",
+      "id": "3",
+      "bbox": [
+        48,
+        145,
+        1184,
+        1
+      ],
+      "geometry": "rect",
+      "fillColor": "#D0D5DD",
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/cz6pgb21",
+      "id": "4",
+      "bbox": [
+        48,
+        168,
+        660,
+        380
+      ],
+      "geometry": "rect",
+      "fillColor": "#F7F8FA",
+      "lineColor": "#D0D5DD",
+      "lineWidth": 1
+    },
+    {
+      "order": 5,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/g7y1oni5",
+      "id": "5",
+      "bbox": [
+        58,
+        178,
+        640,
+        360
+      ],
+      "alt": "Captură reală din Experiment Recommendations și Research Case Library",
+      "contentType": "image/jpeg",
+      "imageFit": "contain",
+      "asset": {
+        "assetId": "0366244a-df76-4eb2-a39d-c13ca9d5c547",
+        "contentType": "image/jpeg",
+        "byteLength": 68607
+      }
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/axo7e1kv",
+      "id": "6",
+      "bbox": [
+        744,
+        174,
+        118,
+        26
+      ],
+      "geometry": "rect",
+      "fillColor": "#1769D2",
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/byxo761g",
+      "id": "7",
+      "bbox": [
+        753,
+        178,
+        100,
+        18
+      ],
+      "geometry": "rect",
+      "text": "PROPUNERE",
+      "textPreview": "PROPUNERE",
+      "resolvedFontSize": 12,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 12,
+        "typeface": "+mn-lt",
+        "color": "#FFFFFF",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "PROPUNERE"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "PROPUNERE",
+          "resolvedTextStyle": {
+            "fontSize": 12,
+            "color": "#FFFFFF",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "PROPUNERE",
+              "fontSize": 12,
+              "color": "#FFFFFF",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/wvapsf25",
+      "id": "8",
+      "bbox": [
+        744,
+        233,
+        8,
+        8
+      ],
+      "geometry": "rect",
+      "fillColor": "#1769D2",
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/hgjqlkjq",
+      "id": "9",
+      "bbox": [
+        766,
+        226,
+        434,
+        28
+      ],
+      "geometry": "rect",
+      "text": "Caz semantic standardizat",
+      "textPreview": "Caz semantic standardizat",
+      "resolvedFontSize": 21,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 21,
+        "typeface": "+mn-lt",
+        "color": "#101828",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Caz semantic standardizat"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Caz semantic standardizat",
+          "resolvedTextStyle": {
+            "fontSize": 21,
+            "color": "#101828",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Caz semantic standardizat",
+              "fontSize": 21,
+              "color": "#101828",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/pg3m58bq",
+      "id": "10",
+      "bbox": [
+        766,
+        257,
+        434,
+        50
+      ],
+      "geometry": "rect",
+      "text": "Articolul sau abstractul devine JSON validat: context, soluție, strategii, rezultate și fragmente-sursă.",
+      "textPreview": "Articolul sau abstractul devine JSON validat: context, soluție, strategii, rezultate și fragmente-sursă.",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "+mn-lt",
+        "color": "#667085",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Articolul sau abstractul devine JSON validat: context,"
+          },
+          {
+            "index": 2,
+            "text": "soluție, strategii, rezultate și fragmente-sursă."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Articolul sau abstractul devine JSON validat: context, soluție, strategii, rezultate și fragmente-sursă.",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "color": "#667085",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Articolul sau abstractul devine JSON validat: context, soluție, strategii, rezultate și fragmente-sursă.",
+              "fontSize": 16,
+              "color": "#667085",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ofulc3u5",
+      "id": "11",
+      "bbox": [
+        744,
+        357,
+        8,
+        8
+      ],
+      "geometry": "rect",
+      "fillColor": "#1769D2",
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/nel43yt0",
+      "id": "12",
+      "bbox": [
+        766,
+        350,
+        434,
+        28
+      ],
+      "geometry": "rect",
+      "text": "Retrieval explicabil",
+      "textPreview": "Retrieval explicabil",
+      "resolvedFontSize": 21,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 21,
+        "typeface": "+mn-lt",
+        "color": "#101828",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Retrieval explicabil"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Retrieval explicabil",
+          "resolvedTextStyle": {
+            "fontSize": 21,
+            "color": "#101828",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Retrieval explicabil",
+              "fontSize": 21,
+              "color": "#101828",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/2dc3adcf",
+      "id": "13",
+      "bbox": [
+        766,
+        381,
+        434,
+        50
+      ],
+      "geometry": "rect",
+      "text": "Embedding persistent, cosine similarity și top-k; fiecare exemplu păstrează rangul, scorul și dovada.",
+      "textPreview": "Embedding persistent, cosine similarity și top-k; fiecare exemplu păstrează rangul, scorul și dovada.",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "+mn-lt",
+        "color": "#667085",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Embedding persistent, cosine similarity și top-k; fiecare"
+          },
+          {
+            "index": 2,
+            "text": "exemplu păstrează rangul, scorul și dovada."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Embedding persistent, cosine similarity și top-k; fiecare exemplu păstrează rangul, scorul și dovada.",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "color": "#667085",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Embedding persistent, cosine similarity și top-k; fiecare exemplu păstrează rangul, scorul și dovada.",
+              "fontSize": 16,
+              "color": "#667085",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/1c3m18bu",
+      "id": "14",
+      "bbox": [
+        744,
+        475,
+        8,
+        8
+      ],
+      "geometry": "rect",
+      "fillColor": "#1769D2",
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0bul83u9",
+      "id": "15",
+      "bbox": [
+        766,
+        468,
+        434,
+        28
+      ],
+      "geometry": "rect",
+      "text": "Experiment complet",
+      "textPreview": "Experiment complet",
+      "resolvedFontSize": 21,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 21,
+        "typeface": "+mn-lt",
+        "color": "#101828",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Experiment complet"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Experiment complet",
+          "resolvedTextStyle": {
+            "fontSize": 21,
+            "color": "#101828",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Experiment complet",
+              "fontSize": 21,
+              "color": "#101828",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/fal4zyto",
+      "id": "16",
+      "bbox": [
+        766,
+        499,
+        434,
+        50
+      ],
+      "geometry": "rect",
+      "text": "Provider-ul AI sintetizează obiectiv, ipoteză, variabile, controale, replici, procedură, metrici și riscuri.",
+      "textPreview": "Provider-ul AI sintetizează obiectiv, ipoteză, variabile, controale, replici, procedură, metrici și riscuri.",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "+mn-lt",
+        "color": "#667085",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Provider-ul AI sintetizează obiectiv, ipoteză, variabile,"
+          },
+          {
+            "index": 2,
+            "text": "controale, replici, procedură, metrici și riscuri."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Provider-ul AI sintetizează obiectiv, ipoteză, variabile, controale, replici, procedură, metrici și riscuri.",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "color": "#667085",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Provider-ul AI sintetizează obiectiv, ipoteză, variabile, controale, replici, procedură, metrici și riscuri.",
+              "fontSize": 16,
+              "color": "#667085",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 17,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/e9c36tc3",
+      "id": "17",
+      "bbox": [
+        58,
+        570,
+        1142,
+        48
+      ],
+      "geometry": "rect",
+      "text": "Implementare: schema JSON → hash de sursă → embedding → retrieval → taxonomie → răspuns final validat; cercetătorul decide aplicarea.",
+      "textPreview": "Implementare: schema JSON → hash de sursă → embedding → retrieval → taxonomie → răspuns final validat; cercetătorul decide aplicarea.",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 15,
+        "typeface": "+mn-lt",
+        "color": "#0D57B7",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Implementare: schema JSON → hash de sursă → embedding → retrieval → taxonomie → răspuns final validat; cercetătorul decide aplicarea."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Implementare: schema JSON → hash de sursă → embedding → retrieval → taxonomie → răspuns final validat; cercetătorul decide aplicarea.",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "color": "#0D57B7",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Implementare: schema JSON → hash de sursă → embedding → retrieval → taxonomie → răspuns final validat; cercetătorul decide aplicarea.",
+              "fontSize": 15,
+              "color": "#0D57B7",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 18,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/l87mdsby",
+      "id": "18",
+      "name": "footer-13",
+      "bbox": [
+        48,
+        674,
+        960,
+        18
+      ],
+      "geometry": "rect",
+      "text": "Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 7",
+      "textPreview": "Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 7",
+      "resolvedFontSize": 12,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 12,
+        "typeface": "+mn-lt",
+        "color": "#667085",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 7"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 7",
+          "resolvedTextStyle": {
+            "fontSize": 12,
+            "color": "#667085",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 7",
+              "fontSize": 12,
+              "color": "#667085",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 19,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/k7e5knad",
+      "id": "19",
+      "name": "slide-number-13",
+      "bbox": [
+        1170,
+        670,
+        62,
+        22
+      ],
+      "geometry": "rect",
+      "text": "13",
+      "textPreview": "13",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 14,
+        "typeface": "+mn-lt",
+        "color": "#101828",
+        "bold": true,
+        "alignment": "right",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "13"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "13",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "color": "#101828",
+            "bold": true,
+            "alignment": "right"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "13",
+              "fontSize": 14,
+              "color": "#101828",
+              "bold": true,
+              "alignment": "right"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

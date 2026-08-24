@@ -43,6 +43,7 @@ from utils.ui import (
     header_icons,
     load_css,
     render_html,
+    render_due_reminder_notifications,
     safe_html,
     sidebar_nav,
     top_brand,
@@ -58,6 +59,7 @@ st.set_page_config(
 require_auth()
 init_db_once(st.session_state)
 load_css()
+render_due_reminder_notifications()
 
 
 BLUE = "#1769d2"

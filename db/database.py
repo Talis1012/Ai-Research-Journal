@@ -55,6 +55,7 @@ _IDENTITY_TABLES = {
     "library_tags",
     "research_cases",
     "analysis_runs",
+    "calendar_reminders",
     "project_discovery_set_papers",
     "manuscripts",
     "manuscript_sections",
@@ -1426,6 +1427,30 @@ def init_db():
     cur.execute("""
         CREATE INDEX IF NOT EXISTS idx_manuscript_assets_order
         ON manuscript_assets(manuscript_id, section_id, sort_order, id)
+    """)
+
+    # =========================
+    # CALENDAR REMINDERS
+    # =========================
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS calendar_reminders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            reminder_at TIMESTAMP NOT NULL,
+            notes TEXT,
+            completed INTEGER NOT NULL DEFAULT 0,
+            notified_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            CHECK (completed IN (0, 1))
+        )
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_calendar_reminders_due
+        ON calendar_reminders(completed, reminder_at)
     """)
 
     conn.commit()

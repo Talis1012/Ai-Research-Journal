@@ -107,6 +107,10 @@ _READER_TABLES: dict[str, tuple[str, ...]] = {
     ),
     "get_analysis_runs": ("analysis_runs",),
     "get_analysis_run": ("analysis_runs",),
+    "get_calendar_reminder": ("calendar_reminders",),
+    "get_calendar_reminders": ("calendar_reminders",),
+    "get_upcoming_calendar_reminders": ("calendar_reminders",),
+    "get_due_calendar_reminders": ("calendar_reminders",),
 }
 
 

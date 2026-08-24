@@ -1,0 +1,358 @@
+{"kind":"deck","id":"pr/5rd2ii","name":"Deck"}
+{"kind":"layout","layoutId":"19af04e2-e039-4f8b-9f1d-e5d3aae014d9","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"612efd06-7947-4d31-99ca-d968622bc687","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/z827t4","slide":1,"title":"PREZENTARE FINALĂ · INTERNSHIP","textShapes":7}
+{"kind":"textbox","id":"sh/tsf6p8n2","slide":1,"text":"PREZENTARE FINALĂ · INTERNSHIP","textPreview":"PREZENTARE FINALĂ · INTERNSHIP","textChars":30,"textLines":1,"bbox":[48,50,510,26]}
+{"kind":"textbox","id":"sh/6ponedob","slide":1,"name":"cover-title","text":"Research Journal AI","textPreview":"Research Journal AI","textChars":19,"textLines":1,"bbox":[48,174,570,72]}
+{"kind":"textbox","id":"sh/7qxoni5w","slide":1,"text":"De la jurnal local asistat de AI\nla un workflow complet de cercetare","textPreview":"De la jurnal local asistat de AI | la un workflow complet de cercetare","textChars":68,"textLines":2,"bbox":[48,274,545,126]}
+{"kind":"shape","id":"sh/gvqpkn6t","slide":1,"bbox":[48,432,84,5]}
+{"kind":"textbox","id":"sh/1wz6tsne","slide":1,"text":"Vlad Ciripescu","textPreview":"Vlad Ciripescu","textChars":14,"textLines":1,"bbox":[48,468,400,34]}
+{"kind":"textbox","id":"sh/uto7idon","slide":1,"text":"09 iulie – 21 august 2026","textPreview":"09 iulie – 21 august 2026","textChars":25,"textLines":1,"bbox":[48,510,400,30]}
+{"kind":"shape","id":"sh/fuhori58","slide":1,"bbox":[626,58,610,590]}
+{"kind":"textbox","id":"sh/wzm58369","slide":1,"text":"WORKSPACE UNIFICAT","textPreview":"WORKSPACE UNIFICAT","textChars":18,"textLines":1,"bbox":[652,104,270,24]}
+{"kind":"shape","id":"sh/x0v6honu","slide":1,"bbox":[642,150,578,370]}
+{"kind":"textbox","id":"sh/gzux8zmp","slide":1,"text":"Experiments  ·  Library  ·  Data Analysis  ·  Paper Writing","textPreview":"Experiments  ·  Library  ·  Data Analysis  ·  Paper Writing","textChars":59,"textLines":1,"bbox":[652,558,558,30]}
+{"kind":"image","id":"im/ylg3uxsb","slide":1,"name":"","alt":"Interfața Research Journal AI, pagina Data Analysis","bbox":[652,160,558,350]}
+{"kind":"notes","id":"nt/z827t4","slide":1,"text":"Deschid prin ideea centrală: proiectul nu este doar o colecție de funcții AI, ci un fir continuu de lucru pentru cercetare. Imaginea este o captură din aplicația Streamlit rulată local cu date demonstrative izolate.\n\n[Sources]\n- README.md\n- git log\n- pages/4_Data_Analysis.py\n- .codex_build/internship_presentation_v2/real_screenshots/data-analysis-real.png"}
+{"kind":"slide","id":"sl/r560bj","slide":2,"title":"PUNCTUL DE PORNIRE","textShapes":18}
+{"kind":"textbox","id":"sh/rm9kbit0","slide":2,"name":"kicker-2","text":"PUNCTUL DE PORNIRE","textPreview":"PUNCTUL DE PORNIRE","textChars":18,"textLines":1,"bbox":[48,34,460,24]}
+{"kind":"textbox","id":"sh/snil4nal","slide":2,"name":"title-2","text":"Informația fragmentată rupe firul cercetării","textPreview":"Informația fragmentată rupe firul cercetării","textChars":44,"textLines":1,"bbox":[48,70,1184,70]}
+{"kind":"shape","id":"sh/dor2dsb6","slide":2,"bbox":[48,145,1184,1]}
+{"kind":"textbox","id":"sh/epk36xsr","slide":2,"text":"Un experiment produce note, fișiere, idei și rezultate; fără context comun, fiecare pas următor reconstruiește manual ce s-a întâmplat.","textPreview":"Un experiment produce note, fișiere, idei și rezultate; fără context comun, fiecare pas următor reconstruiește manual ce s-a întâmplat.","textChars":135,"textLines":1,"bbox":[48,178,1184,62]}
+{"kind":"textbox","id":"sh/fqtkf2tw","slide":2,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[48,280,60,32]}
+{"kind":"textbox","id":"sh/0r2l8nah","slide":2,"text":"Capturare","textPreview":"Capturare","textChars":9,"textLines":1,"bbox":[48,329,250,36]}
+{"kind":"textbox","id":"sh/1sb2hsb2","slide":2,"text":"Note scrise și audio rămân separate de proiect.","textPreview":"Note scrise și audio rămân separate de proiect.","textChars":47,"textLines":1,"bbox":[48,382,248,86]}
+{"kind":"shape","id":"sh/2tk3axsn","slide":2,"bbox":[324,286,1,194]}
+{"kind":"textbox","id":"sh/net4j2t8","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[344,280,60,32]}
+{"kind":"textbox","id":"sh/vadg361c","slide":2,"text":"Înțelegere","textPreview":"Înțelegere","textChars":10,"textLines":1,"bbox":[344,329,250,36]}
+{"kind":"textbox","id":"sh/a94zalkr","slide":2,"text":"Rezumatele și conexiunile se refac manual.","textPreview":"Rezumatele și conexiunile se refac manual.","textChars":42,"textLines":1,"bbox":[344,382,248,86]}
+{"kind":"shape","id":"sh/xcvy5gj2","slide":2,"bbox":[620,286,1,194]}
+{"kind":"textbox","id":"sh/wbmhcb2x","slide":2,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[640,280,60,32]}
+{"kind":"textbox","id":"sh/n6dgz6l0","slide":2,"text":"Validare","textPreview":"Validare","textChars":8,"textLines":1,"bbox":[640,329,250,36]}
+{"kind":"textbox","id":"sh/mlkz61kf","slide":2,"text":"Literatura și analiza datelor trăiesc în instrumente diferite.","textPreview":"Literatura și analiza datelor trăiesc în instrumente diferite.","textChars":62,"textLines":1,"bbox":[640,382,248,86]}
+{"kind":"shape","id":"sh/98vy1g36","slide":2,"bbox":[916,286,1,194]}
+{"kind":"textbox","id":"sh/87mh8b2l","slide":2,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[936,280,60,32]}
+{"kind":"textbox","id":"sh/72x0bq1k","slide":2,"text":"Comunicare","textPreview":"Comunicare","textChars":10,"textLines":1,"bbox":[936,329,250,36]}
+{"kind":"textbox","id":"sh/61ozi5kz","slide":2,"text":"Manuscrisul pierde trasabilitatea către dovezi.","textPreview":"Manuscrisul pierde trasabilitatea către dovezi.","textChars":47,"textLines":1,"bbox":[936,382,248,86]}
+{"kind":"shape","id":"sh/2xsja947","slide":2,"bbox":[48,526,1184,93]}
+{"kind":"textbox","id":"sh/3y1kjuls","slide":2,"text":"Obiectivul proiectului: un singur workspace care păstrează contextul de la observație până la lucrare.","textPreview":"Obiectivul proiectului: un singur workspace care păstrează contextul de la observație până la lucrare.","textChars":102,"textLines":1,"bbox":[82,551,1116,46]}
+{"kind":"textbox","id":"sh/oza1czmx","slide":2,"name":"footer-2","text":"Vlad Ciripescu  ·  Research Journal AI  ·  CONTEXT","textPreview":"Vlad Ciripescu  ·  Research Journal AI  ·  CONTEXT","textChars":50,"textLines":1,"bbox":[48,674,960,18]}
+{"kind":"textbox","id":"sh/p0j2l43i","slide":2,"name":"slide-number-2","text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[1170,670,62,22]}
+{"kind":"notes","id":"nt/r560bj","slide":2,"text":"Prezint problema înaintea funcțiilor: cercetătorul nu are nevoie de încă un chatbot, ci de continuitate și trasabilitate între etapele muncii sale.\n\n[Sources]\n- README.md\n- app.py\n- pages/1_Experiments.py\n- pages/2_Library.py\n- pages/3_Paper_Writing.py\n- pages/4_Data_Analysis.py"}
+{"kind":"slide","id":"sl/ye9sel","slide":3,"title":"CRONOLOGIE · IULIE","textShapes":17}
+{"kind":"textbox","id":"sh/zuh0ra1g","slide":3,"name":"kicker-3","text":"CRONOLOGIE · IULIE","textPreview":"CRONOLOGIE · IULIE","textChars":18,"textLines":1,"bbox":[48,34,460,24]}
+{"kind":"textbox","id":"sh/0vqh0fi1","slide":3,"name":"title-3","text":"În iulie, nucleul local a devenit un workspace coerent","textPreview":"În iulie, nucleul local a devenit un workspace coerent","textChars":54,"textLines":1,"bbox":[48,70,1184,70]}
+{"kind":"shape","id":"sh/lwzitkjm","slide":3,"bbox":[48,145,1184,1]}
+{"kind":"shape","id":"sh/mxsz2507","slide":3,"bbox":[169,350,942,0]}
+{"kind":"shape","id":"sh/7y10va1c","slide":3,"bbox":[161,342,16,16]}
+{"kind":"textbox","id":"sh/8za14fix","slide":3,"text":"09 IUL","textPreview":"09 IUL","textChars":6,"textLines":1,"bbox":[48,287,242,28]}
+{"kind":"textbox","id":"sh/9kjixkzi","slide":3,"text":"Prototipul","textPreview":"Prototipul","textChars":10,"textLines":1,"bbox":[48,390,242,56]}
+{"kind":"textbox","id":"sh/ulsj6p03","slide":3,"text":"Proiecte, experimente, note, audio, rezumate și mind map.","textPreview":"Proiecte, experimente, note, audio, rezumate și mind map.","textChars":57,"textLines":1,"bbox":[48,455,242,88]}
+{"kind":"shape","id":"sh/vm10zuho","slide":3,"bbox":[475,342,16,16]}
+{"kind":"textbox","id":"sh/7ehon6p0","slide":3,"text":"15–16 IUL","textPreview":"15–16 IUL","textChars":9,"textLines":1,"bbox":[362,287,242,28]}
+{"kind":"textbox","id":"sh/6t87e18v","slide":3,"text":"UI unificat","textPreview":"UI unificat","textChars":11,"textLines":1,"bbox":[362,390,242,56]}
+{"kind":"textbox","id":"sh/tgzqpg76","slide":3,"text":"Patru destinații principale și un flux Experiments integrat.","textPreview":"Patru destinații principale și un flux Experiments integrat.","textChars":60,"textLines":1,"bbox":[362,455,242,88]}
+{"kind":"shape","id":"sh/8fqpgbql","slide":3,"bbox":[789,342,16,16]}
+{"kind":"textbox","id":"sh/jqxojmp4","slide":3,"text":"21 IUL","textPreview":"21 IUL","textChars":6,"textLines":1,"bbox":[676,287,242,28]}
+{"kind":"textbox","id":"sh/ypo7ah8j","slide":3,"text":"Library","textPreview":"Library","textChars":7,"textLines":1,"bbox":[676,390,242,56]}
+{"kind":"textbox","id":"sh/lsz6lw7a","slide":3,"text":"Fișiere, foldere, metadate și căutare OpenAlex contextuală.","textPreview":"Fișiere, foldere, metadate și căutare OpenAlex contextuală.","textChars":59,"textLines":1,"bbox":[676,455,242,88]}
+{"kind":"shape","id":"sh/kr6pcrqp","slide":3,"bbox":[1103,342,16,16]}
+{"kind":"textbox","id":"sh/3m18vqp8","slide":3,"text":"21–23 IUL","textPreview":"21–23 IUL","textChars":9,"textLines":1,"bbox":[990,287,242,28]}
+{"kind":"textbox","id":"sh/2ls7ml8n","slide":3,"text":"Paper Writing","textPreview":"Paper Writing","textChars":13,"textLines":1,"bbox":[990,390,242,56]}
+{"kind":"textbox","id":"sh/ehcrepsv","slide":3,"text":"Outline, citări, asistent AI, review, versiuni și export.","textPreview":"Outline, citări, asistent AI, review, versiuni și export.","textChars":57,"textLines":1,"bbox":[990,455,242,88]}
+{"kind":"textbox","id":"sh/zi5snu9g","slide":3,"text":"Accentul s-a mutat de la funcții izolate la un produs navigabil cap-coadă.","textPreview":"Accentul s-a mutat de la funcții izolate la un produs navigabil cap-coadă.","textChars":74,"textLines":1,"bbox":[48,595,1184,46]}
+{"kind":"textbox","id":"sh/0jetgza1","slide":3,"name":"footer-3","text":"Vlad Ciripescu  ·  Research Journal AI  ·  CRONOLOGIE","textPreview":"Vlad Ciripescu  ·  Research Journal AI  ·  CRONOLOGIE","textChars":53,"textLines":1,"bbox":[48,674,960,18]}
+{"kind":"textbox","id":"sh/14napkrm","slide":3,"name":"slide-number-3","text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[1170,670,62,22]}
+{"kind":"notes","id":"nt/ye9sel","slide":3,"text":"Explic evoluția în ordinea commit-urilor. Redesign-ul nu a fost doar vizual: a consolidat mai multe pagini vechi într-un workspace de Experiments și a pregătit cele patru destinații actuale.\n\n[Sources]\n- git log --date=short --reverse\n- commits 5546d19, 82ce865, 9f12e75, 548be76, c309492, 3f0a056, f127ce3"}
+{"kind":"slide","id":"sl/2yb4kb","slide":4,"title":"CRONOLOGIE · AUGUST","textShapes":17}
+{"kind":"textbox","id":"sh/k7e98ri5","slide":4,"name":"kicker-4","text":"CRONOLOGIE · AUGUST","textPreview":"CRONOLOGIE · AUGUST","textChars":19,"textLines":1,"bbox":[48,34,460,24]}
+{"kind":"textbox","id":"sh/jm5sfmhk","slide":4,"name":"title-4","text":"În august, proiectul a devenit sigur și cloud-ready","textPreview":"În august, proiectul a devenit sigur și cloud-ready","textChars":51,"textLines":1,"bbox":[48,70,1184,70]}
+{"kind":"shape","id":"sh/ilwr6h0f","slide":4,"bbox":[48,145,1184,1]}
+{"kind":"shape","id":"sh/tc7algz2","slide":4,"bbox":[169,350,942,0]}
+{"kind":"shape","id":"sh/sbytcbih","slide":4,"bbox":[161,342,16,16]}
+{"kind":"textbox","id":"sh/7apsj6hw","slide":4,"text":"29–30 IUL","textPreview":"29–30 IUL","textChars":9,"textLines":1,"bbox":[48,287,242,28]}
+{"kind":"textbox","id":"sh/69wra10b","slide":4,"text":"Identitate","textPreview":"Identitate","textChars":10,"textLines":1,"bbox":[48,390,242,56]}
+{"kind":"textbox","id":"sh/hg7apgzy","slide":4,"text":"Login Auth0, izolare per utilizator, limite și hardening.","textPreview":"Login Auth0, izolare per utilizator, limite și hardening.","textChars":57,"textLines":1,"bbox":[48,455,242,88]}
+{"kind":"shape","id":"sh/gfytgbid","slide":4,"bbox":[475,342,16,16]}
+{"kind":"textbox","id":"sh/mdwv6t8b","slide":4,"text":"03 AUG","textPreview":"03 AUG","textChars":6,"textLines":1,"bbox":[362,287,242,28]}
+{"kind":"textbox","id":"sh/nepwfy9w","slide":4,"text":"Data Analysis","textPreview":"Data Analysis","textChars":13,"textLines":1,"bbox":[362,390,242,56]}
+{"kind":"textbox","id":"sh/ozyd8jqh","slide":4,"text":"Pipeline-uri scikit-learn, metrici, istoric și exporturi.","textPreview":"Pipeline-uri scikit-learn, metrici, istoric și exporturi.","textChars":57,"textLines":1,"bbox":[362,455,242,88]}
+{"kind":"shape","id":"sh/907ehorm","slide":4,"bbox":[789,342,16,16]}
+{"kind":"textbox","id":"sh/a1gvat87","slide":4,"text":"05–06 AUG","textPreview":"05–06 AUG","textChars":9,"textLines":1,"bbox":[676,287,242,28]}
+{"kind":"textbox","id":"sh/b2pwjy9s","slide":4,"text":"Supabase","textPreview":"Supabase","textChars":8,"textLines":1,"bbox":[676,390,242,56]}
+{"kind":"textbox","id":"sh/w3ydc3qd","slide":4,"text":"PostgreSQL, Storage privat, RLS, cache și pipeline DB.","textPreview":"PostgreSQL, Storage privat, RLS, cache și pipeline DB.","textChars":54,"textLines":1,"bbox":[676,455,242,88]}
+{"kind":"shape","id":"sh/x47el87y","slide":4,"bbox":[1103,342,16,16]}
+{"kind":"textbox","id":"sh/q5cve983","slide":4,"text":"19–21 AUG","textPreview":"19–21 AUG","textChars":9,"textLines":1,"bbox":[990,287,242,28]}
+{"kind":"textbox","id":"sh/r6lc7e9o","slide":4,"text":"Research Cases","textPreview":"Research Cases","textChars":14,"textLines":1,"bbox":[990,390,242,56]}
+{"kind":"textbox","id":"sh/va1sfapg","slide":4,"text":"Embedding-uri, top-k și sinteza trasabilă a unui experiment complet.","textPreview":"Embedding-uri, top-k și sinteza trasabilă a unui experiment complet.","textChars":68,"textLines":1,"bbox":[990,455,242,88]}
+{"kind":"textbox","id":"sh/upsb65ov","slide":4,"text":"Ultimele etape au transformat prototipul într-o aplicație deployabilă și verificabilă.","textPreview":"Ultimele etape au transformat prototipul într-o aplicație deployabilă și verificabilă.","textChars":86,"textLines":1,"bbox":[48,595,1184,46]}
+{"kind":"textbox","id":"sh/hcjah07m","slide":4,"name":"footer-4","text":"Vlad Ciripescu  ·  Research Journal AI  ·  CRONOLOGIE","textPreview":"Vlad Ciripescu  ·  Research Journal AI  ·  CRONOLOGIE","textChars":53,"textLines":1,"bbox":[48,674,960,18]}
+{"kind":"textbox","id":"sh/gbat8v61","slide":4,"name":"slide-number-4","text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[1170,670,62,22]}
+{"kind":"notes","id":"nt/2yb4kb","slide":4,"text":"Subliniez diferența dintre funcționalitate și maturitate: autentificarea, migrarea datelor, performanța și testele au făcut posibilă folosirea sigură în cloud. Ultimul pas extinde retrieval-ul inițial cu sinteza unui experiment complet, fără a pierde sursele și scorurile de similitudine.\n\n[Sources]\n- git log --date=short --reverse\n- commits 9012e88, 732dab9, 5dc6f3a, a15429e, 3acefc2, 5a194d3, ac99f66, 16b3c5b, 72e11e6"}
+{"kind":"slide","id":"sl/o1oto8","slide":5,"title":"ARHITECTURA FINALĂ","textShapes":19}
+{"kind":"textbox","id":"sh/e10jilcz","slide":5,"name":"kicker-5","text":"ARHITECTURA FINALĂ","textPreview":"ARHITECTURA FINALĂ","textChars":18,"textLines":1,"bbox":[48,34,460,24]}
+{"kind":"textbox","id":"sh/14bit0bq","slide":5,"name":"title-5","text":"Arhitectura separă interfața, logica, AI-ul și datele","textPreview":"Arhitectura separă interfața, logica, AI-ul și datele","textChars":53,"textLines":1,"bbox":[48,70,1184,70]}
+{"kind":"shape","id":"sh/g321kvu5","slide":5,"bbox":[48,145,1184,1]}
+{"kind":"shape","id":"sh/36t0vatg","slide":5,"bbox":[282,339,72,0]}
+{"kind":"shape","id":"sh/25kjm5cb","slide":5,"bbox":[570,339,72,0]}
+{"kind":"shape","id":"sh/p8bixkbm","slide":5,"bbox":[858,339,72,0]}
+{"kind":"shape","id":"sh/o721ofu1","slide":5,"bbox":[48,245,252,212]}
+{"kind":"textbox","id":"sh/bad0zats","slide":5,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[68,266,42,24]}
+{"kind":"textbox","id":"sh/q94jq5c7","slide":5,"text":"Streamlit UI","textPreview":"Streamlit UI","textChars":12,"textLines":1,"bbox":[68,307,212,34]}
+{"kind":"textbox","id":"sh/cjqlkrm9","slide":5,"text":"4 pagini principale\ncomponente reutilizabile\nfragmente cu rerulare locală","textPreview":"4 pagini principale | componente reutilizabile | fragmente cu rerulare locală","textChars":73,"textLines":3,"bbox":[68,357,212,76]}
+{"kind":"shape","id":"sh/dkzmdw3u","slide":5,"bbox":[354,245,252,212]}
+{"kind":"textbox","id":"sh/qh83ih43","slide":5,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[374,266,42,24]}
+{"kind":"textbox","id":"sh/bih4bmlo","slide":5,"text":"Servicii","textPreview":"Servicii","textChars":8,"textLines":1,"bbox":[374,307,212,34]}
+{"kind":"textbox","id":"sh/0na5or2l","slide":5,"text":"workflow-uri de domeniu\nvalidare și export\nlimite de resurse","textPreview":"workflow-uri de domeniu | validare și export | limite de resurse","textChars":60,"textLines":3,"bbox":[374,357,212,76]}
+{"kind":"shape","id":"sh/lojmhw3q","slide":5,"bbox":[642,245,252,212]}
+{"kind":"textbox","id":"sh/yls3m14f","slide":5,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[662,266,42,24]}
+{"kind":"textbox","id":"sh/zm14f6l0","slide":5,"text":"AI providers","textPreview":"AI providers","textChars":12,"textLines":1,"bbox":[662,307,212,34]}
+{"kind":"textbox","id":"sh/8ba5sb2h","slide":5,"text":"Gemini în producție\nMockProvider în teste\nscheme JSON + grounding","textPreview":"Gemini în producție | MockProvider în teste | scheme JSON + grounding","textChars":65,"textLines":3,"bbox":[662,357,212,76]}
+{"kind":"shape","id":"sh/9cjmlg32","slide":5,"bbox":[930,245,252,212]}
+{"kind":"textbox","id":"sh/h8zm5gv6","slide":5,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[950,266,42,24]}
+{"kind":"textbox","id":"sh/w76lwbul","slide":5,"text":"Date & fișiere","textPreview":"Date & fișiere","textChars":14,"textLines":1,"bbox":[950,307,212,34]}
+{"kind":"textbox","id":"sh/v6x436d0","slide":5,"text":"PostgreSQL + RLS\nSupabase Storage\nSQLite fallback local","textPreview":"PostgreSQL + RLS | Supabase Storage | SQLite fallback local","textChars":55,"textLines":3,"bbox":[950,357,212,76]}
+{"kind":"shape","id":"sh/u5o3u1cf","slide":5,"bbox":[48,505,1184,1]}
+{"kind":"textbox","id":"sh/5wzm9gv2","slide":5,"text":"Principiul de implementare","textPreview":"Principiul de implementare","textChars":26,"textLines":1,"bbox":[48,535,270,30]}
+{"kind":"textbox","id":"sh/4vql0bux","slide":5,"text":"Interfața orchestrează; serviciile decid; query layer-ul persistă; provider-ul AI rămâne înlocuibil.","textPreview":"Interfața orchestrează; serviciile decid; query layer-ul persistă; provider-ul AI rămâne înlocuibil.","textChars":100,"textLines":1,"bbox":[332,531,900,42]}
+{"kind":"textbox","id":"sh/juh476dc","slide":5,"text":"Același cod rulează cloud-first și păstrează fallback-uri locale pentru testare.","textPreview":"Același cod rulează cloud-first și păstrează fallback-uri locale pentru testare.","textChars":80,"textLines":1,"bbox":[332,582,900,34]}
+{"kind":"textbox","id":"sh/it83ylcr","slide":5,"name":"footer-5","text":"Vlad Ciripescu  ·  Research Journal AI  ·  ARHITECTURĂ","textPreview":"Vlad Ciripescu  ·  Research Journal AI  ·  ARHITECTURĂ","textChars":54,"textLines":1,"bbox":[48,674,960,18]}
+{"kind":"textbox","id":"sh/l0fmxwvy","slide":5,"name":"slide-number-5","text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[1170,670,62,22]}
+{"kind":"notes","id":"nt/o1oto8","slide":5,"text":"Arăt separarea pe straturi. Pagina Streamlit nu conține direct toate detaliile de AI sau storage; acestea sunt encapsulate în servicii, provider și query layer. Abstracția AI permite Gemini în producție și un provider determinist în teste.\n\n[Sources]\n- app.py\n- pages/*.py\n- services/*.py\n- ai/base.py\n- ai/factory.py\n- ai/gemini_provider.py\n- ai/mock_provider.py\n- db/*.py\n- README.md"}
+{"kind":"slide","id":"sl/3aqlh8","slide":6,"title":"ETAPA 1 · 09–16 IULIE","textShapes":13}
+{"kind":"textbox","id":"sh/lwzulwrq","slide":6,"name":"kicker-6","text":"ETAPA 1 · 09–16 IULIE","textPreview":"ETAPA 1 · 09–16 IULIE","textChars":21,"textLines":1,"bbox":[48,34,460,24]}
+{"kind":"textbox","id":"sh/y9obahsf","slide":6,"name":"title-6","text":"Experiments păstrează contextul în jurul fiecărui proiect","textPreview":"Experiments păstrează contextul în jurul fiecărui proiect","textChars":57,"textLines":1,"bbox":[48,70,1184,70]}
+{"kind":"shape","id":"sh/zaxcjm9k","slide":6,"bbox":[48,145,1184,1]}
+{"kind":"shape","id":"sh/8zqtgbqh","slide":6,"bbox":[48,174,118,26]}
+{"kind":"textbox","id":"sh/90zupwr2","slide":6,"text":"CAPTURARE","textPreview":"CAPTURARE","textChars":9,"textLines":1,"bbox":[57,178,100,18]}
+{"kind":"shape","id":"sh/mx8be1sb","slide":6,"bbox":[48,235,8,8]}
+{"kind":"textbox","id":"sh/7yhcn69w","slide":6,"text":"Proiecte și experimente","textPreview":"Proiecte și experimente","textChars":23,"textLines":1,"bbox":[70,228,498,28]}
+{"kind":"textbox","id":"sh/w3qdkbqd","slide":6,"text":"Ierarhie clară, obiective, metadate și navigare persistentă.","textPreview":"Ierarhie clară, obiective, metadate și navigare persistentă.","textChars":60,"textLines":1,"bbox":[70,259,498,50]}
+{"kind":"shape","id":"sh/h4jutgry","slide":6,"bbox":[48,329,8,8]}
+{"kind":"textbox","id":"sh/5ozy1cvi","slide":6,"text":"Note scrise și audio","textPreview":"Note scrise și audio","textChars":20,"textLines":1,"bbox":[70,322,498,28]}
+{"kind":"textbox","id":"sh/kn6hs7ed","slide":6,"text":"Observații editabile; înregistrările WAV sunt validate, salvate și transcrise cu Faster Whisper.","textPreview":"Observații editabile; înregistrările WAV sunt validate, salvate și transcrise cu Faster Whisper.","textChars":96,"textLines":1,"bbox":[70,353,498,50]}
+{"kind":"shape","id":"sh/jmxgz2ds","slide":6,"bbox":[48,439,8,8]}
+{"kind":"textbox","id":"sh/ilozqxw7","slide":6,"text":"Chat AI contextual","textPreview":"Chat AI contextual","textChars":18,"textLines":1,"bbox":[70,432,498,28]}
+{"kind":"textbox","id":"sh/tszi5cvu","slide":6,"text":"Răspunsurile folosesc doar notele experimentului sau contextul proiectului selectat.","textPreview":"Răspunsurile folosesc doar notele experimentului sau contextul proiectului selectat.","textChars":84,"textLines":1,"bbox":[70,463,498,50]}
+{"kind":"textbox","id":"sh/srqhw7e9","slide":6,"text":"Implementare","textPreview":"Implementare","textChars":12,"textLines":1,"bbox":[48,563,150,26]}
+{"kind":"textbox","id":"sh/7qh032do","slide":6,"text":"pages/1_Experiments.py → db/queries.py → chat/transcription services; callbacks reactivează UserScope înainte de accesul privat.","textPreview":"pages/1_Experiments.py → db/queries.py → chat/transcription services; callbacks reactivează UserScope înainte de accesul privat.","textChars":128,"textLines":1,"bbox":[184,555,390,62]}
+{"kind":"shape","id":"sh/6p8zuhw3","slide":6,"bbox":[615,168,605,455]}
+{"kind":"textbox","id":"sh/ovmhkne5","slide":6,"name":"footer-6","text":"Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 1","textPreview":"Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 1","textChars":50,"textLines":1,"bbox":[48,674,960,18]}
+{"kind":"textbox","id":"sh/0zqh0nm1","slide":6,"name":"slide-number-6","text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[1170,670,62,22]}
+{"kind":"image","id":"im/2lgfe5wf","slide":6,"name":"","alt":"Captură reală din pagina Experiments, tab-ul Workspace","bbox":[625,178,585,435]}
+{"kind":"notes","id":"nt/3aqlh8","slide":6,"text":"Aceasta este baza proiectului. Fiecare experiment are note, audio și o conversație AI proprie; datele nu sunt amestecate între proiecte sau utilizatori. Transcrierea este salvată ca observație editabilă.\n\n[Sources]\n- pages/1_Experiments.py\n- services/transcription_service.py\n- services/chat_service.py\n- db/queries.py\n- utils/auth.py\n- utils/user_scope.py\n- .codex_build/internship_presentation_v2/real_screenshots/experiments-workspace-real.png"}
+{"kind":"slide","id":"sl/dhwmtq","slide":7,"title":"ETAPA 2 · 16 IULIE","textShapes":12}
+{"kind":"textbox","id":"sh/7i1wr6hc","slide":7,"name":"kicker-7","text":"ETAPA 2 · 16 IULIE","textPreview":"ETAPA 2 · 16 IULIE","textChars":18,"textLines":1,"bbox":[48,34,460,24]}
+{"kind":"textbox","id":"sh/sjax0byx","slide":7,"name":"title-7","text":"Insights transformă observațiile în cunoaștere editabilă","textPreview":"Insights transformă observațiile în cunoaștere editabilă","textChars":56,"textLines":1,"bbox":[48,70,1184,70]}
+{"kind":"shape","id":"sh/tkjetgzi","slide":7,"bbox":[48,145,1184,1]}
+{"kind":"shape","id":"sh/id8fuhgv","slide":7,"bbox":[48,168,625,458]}
+{"kind":"shape","id":"sh/kfqxwry1","slide":7,"bbox":[710,174,118,26]}
+{"kind":"textbox","id":"sh/5gjepwz6","slide":7,"text":"SINTEZĂ","textPreview":"SINTEZĂ","textChars":7,"textLines":1,"bbox":[719,178,100,18]}
+{"kind":"shape","id":"sh/ap8vqhgj","slide":7,"bbox":[710,233,8,8]}
+{"kind":"textbox","id":"sh/vqhwjmh4","slide":7,"text":"Rezumate pe două niveluri","textPreview":"Rezumate pe două niveluri","textChars":25,"textLines":1,"bbox":[732,226,468,28]}
+{"kind":"textbox","id":"sh/zu90jm5g","slide":7,"text":"Rezumat per experiment sau per proiect, cu structuri standard ori prompt personalizat.","textPreview":"Rezumat per experiment sau per proiect, cu structuri standard ori prompt personalizat.","textChars":86,"textLines":1,"bbox":[732,257,468,50]}
+{"kind":"shape","id":"sh/yt0jahov","slide":7,"bbox":[710,335,8,8]}
+{"kind":"textbox","id":"sh/lwr2lwnm","slide":7,"text":"Idei-cheie editabile","textPreview":"Idei-cheie editabile","textChars":20,"textLines":1,"bbox":[732,328,468,28]}
+{"kind":"textbox","id":"sh/kvi1cr61","slide":7,"text":"AI extrage titlu, descriere, dovezi și importanță; utilizatorul păstrează controlul final.","textPreview":"AI extrage titlu, descriere, dovezi și importanță; utilizatorul păstrează controlul final.","textChars":90,"textLines":1,"bbox":[732,359,468,50]}
+{"kind":"shape","id":"sh/7ytknm5c","slide":7,"bbox":[710,449,8,8]}
+{"kind":"textbox","id":"sh/mx0je1or","slide":7,"text":"Mind map incremental","textPreview":"Mind map incremental","textChars":20,"textLines":1,"bbox":[732,442,468,28]}
+{"kind":"textbox","id":"sh/tkb2pwni","slide":7,"text":"Sursele noi sunt detectate prin semnături și fuzionate fără a regenera inutil întregul graf.","textPreview":"Sursele noi sunt detectate prin semnături și fuzionate fără a regenera inutil întregul graf.","textChars":92,"textLines":1,"bbox":[732,473,468,50]}
+{"kind":"textbox","id":"sh/8z21gr6x","slide":7,"text":"Implementare: summary_service + mindmap_service; hash-uri pe surse, upsert de noduri și muchii, apoi persistare în tabele dedicate.","textPreview":"Implementare: summary_service + mindmap_service; hash-uri pe surse, upsert de noduri și muchii, apoi persistare în tabele dedicate.","textChars":131,"textLines":1,"bbox":[710,564,490,58]}
+{"kind":"textbox","id":"sh/n2p0b2p8","slide":7,"name":"footer-7","text":"Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 2","textPreview":"Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 2","textChars":50,"textLines":1,"bbox":[48,674,960,18]}
+{"kind":"textbox","id":"sh/21gj2xon","slide":7,"name":"slide-number-7","text":"07","textPreview":"07","textChars":2,"textLines":1,"bbox":[1170,670,62,22]}
+{"kind":"image","id":"im/yp4bu5kb","slide":7,"name":"","alt":"Captură reală din pagina Experiments, tab-ul Insights","bbox":[58,178,605,438]}
+{"kind":"notes","id":"nt/dhwmtq","slide":7,"text":"Subliniez caracterul editabil. AI-ul propune, dar cercetătorul poate modifica rezumatele și ideile. Mind map-ul folosește stări de sursă și hash-uri pentru actualizări incrementale.\n\n[Sources]\n- pages/1_Experiments.py\n- services/summary_service.py\n- services/mindmap_service.py\n- db/queries.py\n- tests/test_insight_editing.py\n- .codex_build/internship_presentation_v2/real_screenshots/experiments-insights-real.png"}
+{"kind":"slide","id":"sl/q8lwyo","slide":8,"title":"ETAPA 3 · 21 IULIE","textShapes":12}
+{"kind":"textbox","id":"sh/ep0jeh4b","slide":8,"name":"kicker-8","text":"ETAPA 3 · 21 IULIE","textPreview":"ETAPA 3 · 21 IULIE","textChars":18,"textLines":1,"bbox":[48,34,460,24]}
+{"kind":"textbox","id":"sh/1sb2pw3m","slide":8,"name":"title-8","text":"Library centralizează literatura și artefactele cercetării","textPreview":"Library centralizează literatura și artefactele cercetării","textChars":58,"textLines":1,"bbox":[48,70,1184,70]}
+{"kind":"shape","id":"sh/0ri1gr21","slide":8,"bbox":[48,145,1184,1]}
+{"kind":"shape","id":"sh/r290jmlk","slide":8,"bbox":[48,174,118,26]}
+{"kind":"textbox","id":"sh/q10jah4z","slide":8,"text":"ORGANIZARE","textPreview":"ORGANIZARE","textChars":10,"textLines":1,"bbox":[57,178,100,18]}
+{"kind":"shape","id":"sh/dor2lc3q","slide":8,"bbox":[48,235,8,8]}
+{"kind":"textbox","id":"sh/c3i1c7m5","slide":8,"text":"Colecții și metadate","textPreview":"Colecții și metadate","textChars":20,"textLines":1,"bbox":[70,228,473,28]}
+{"kind":"textbox","id":"sh/bytkv6lo","slide":8,"text":"Foldere ierarhice, tipuri de item, status de lectură, autori, DOI, taguri și proiecte asociate.","textPreview":"Foldere ierarhice, tipuri de item, status de lectură, autori, DOI, taguri și proiecte asociate.","textChars":95,"textLines":1,"bbox":[70,259,473,50]}
+{"kind":"shape","id":"sh/axkjm1kj","slide":8,"bbox":[48,349,8,8]}
+{"kind":"textbox","id":"sh/crelsvyl","slide":8,"text":"Upload controlat","textPreview":"Upload controlat","textChars":16,"textLines":1,"bbox":[70,342,473,28]}
+{"kind":"textbox","id":"sh/dcnml0f6","slide":8,"text":"PDF, documente, dataseturi și audio; extensii, dimensiuni, batch-uri și căi sunt validate înainte de stocare.","textPreview":"PDF, documente, dataseturi și audio; extensii, dimensiuni, batch-uri și căi sunt validate înainte de stocare.","textChars":109,"textLines":1,"bbox":[70,373,473,50]}
+{"kind":"shape","id":"sh/qpw3qlgv","slide":8,"bbox":[48,469,8,8]}
+{"kind":"textbox","id":"sh/rq54jqxg","slide":8,"text":"Operații complete","textPreview":"Operații complete","textChars":17,"textLines":1,"bbox":[70,462,473,28]}
+{"kind":"textbox","id":"sh/4nulobyp","slide":8,"text":"Filtrare, sortare, paginare, mutare în lot, descărcare și prevenirea duplicatelor prin identificatori normalizați.","textPreview":"Filtrare, sortare, paginare, mutare în lot, descărcare și prevenirea duplicatelor prin identificatori normalizați.","textChars":114,"textLines":1,"bbox":[70,493,473,50]}
+{"kind":"textbox","id":"sh/po3mhgfa","slide":8,"text":"Implementare: library_service validează inputul și calea; library_queries normalizează DOI/OpenAlex ID și persistă relațiile folder–tag–proiect.","textPreview":"Implementare: library_service validează inputul și calea; library_queries normalizează DOI/OpenAlex ID și persistă relațiile folder–tag–p...","textChars":144,"textLines":1,"bbox":[70,574,470,54]}
+{"kind":"shape","id":"sh/2lc3m1gj","slide":8,"bbox":[578,168,642,458]}
+{"kind":"textbox","id":"sh/gjulkbyt","slide":8,"name":"footer-8","text":"Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 3","textPreview":"Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 3","textChars":50,"textLines":1,"bbox":[48,674,960,18]}
+{"kind":"textbox","id":"sh/hk3mdwfy","slide":8,"name":"slide-number-8","text":"08","textPreview":"08","textChars":2,"textLines":1,"bbox":[1170,670,62,22]}
+{"kind":"image","id":"im/wna503yt","slide":8,"name":"","alt":"Captură reală din pagina Library, colecția My Library","bbox":[588,178,622,438]}
+{"kind":"notes","id":"nt/q8lwyo","slide":8,"text":"Library devine sursa comună pentru articole, fișiere și dataseturi. Layer-ul de storage validează calea și tipul, iar query layer-ul leagă item-urile de proiecte și taguri.\n\n[Sources]\n- pages/2_Library.py\n- services/library_service.py\n- db/library_queries.py\n- tests/test_library.py\n- .codex_build/internship_presentation_v2/real_screenshots/library-real.png"}
+{"kind":"slide","id":"sl/rwrqnb","slide":9,"title":"ETAPA 3 · 21 IULIE","textShapes":12}
+{"kind":"textbox","id":"sh/wb69czm5","slide":9,"name":"kicker-9","text":"ETAPA 3 · 21 IULIE","textPreview":"ETAPA 3 · 21 IULIE","textChars":18,"textLines":1,"bbox":[48,34,460,24]}
+{"kind":"textbox","id":"sh/vax83ulk","slide":9,"name":"title-9","text":"Discovery combină căutarea și ranking-ul explicabil","textPreview":"Discovery combină căutarea și ranking-ul explicabil","textChars":51,"textLines":1,"bbox":[48,70,1184,70]}
+{"kind":"shape","id":"sh/a9orap4f","slide":9,"bbox":[48,145,1184,1]}
+{"kind":"shape","id":"sh/5gzq9432","slide":9,"bbox":[48,168,660,458]}
+{"kind":"shape","id":"sh/jeh87elw","slide":9,"bbox":[744,174,118,26]}
+{"kind":"textbox","id":"sh/id8re94b","slide":9,"text":"DESCOPERIRE","textPreview":"DESCOPERIRE","textChars":11,"textLines":1,"bbox":[753,178,100,18]}
+{"kind":"shape","id":"sh/t4jado3y","slide":9,"bbox":[744,233,8,8]}
+{"kind":"textbox","id":"sh/s3a9kj2d","slide":9,"text":"Profil de căutare","textPreview":"Profil de căutare","textChars":17,"textLines":1,"bbox":[766,226,434,28]}
+{"kind":"textbox","id":"sh/698zyhwr","slide":9,"text":"Tema proiectului, cuvintele-cheie și ideile salvate generează interogări multiple, dar editabile.","textPreview":"Tema proiectului, cuvintele-cheie și ideile salvate generează interogări multiple, dar editabile.","textChars":97,"textLines":1,"bbox":[766,257,434,50]}
+{"kind":"shape","id":"sh/rahgr2xc","slide":9,"bbox":[744,345,8,8]}
+{"kind":"textbox","id":"sh/sbqh07ex","slide":9,"text":"Ranking hibrid","textPreview":"Ranking hibrid","textChars":14,"textLines":1,"bbox":[766,338,434,28]}
+{"kind":"textbox","id":"sh/tczytcfi","slide":9,"text":"TF–IDF, acoperirea interogărilor, ideile-cheie, citările, recența și open access formează scorul de bază; AI îl îmbogățește.","textPreview":"TF–IDF, acoperirea interogărilor, ideile-cheie, citările, recența și open access formează scorul de bază; AI îl îmbogățește.","textChars":124,"textLines":1,"bbox":[766,369,434,50]}
+{"kind":"shape","id":"sh/ed8z2hw3","slide":9,"bbox":[744,485,8,8]}
+{"kind":"textbox","id":"sh/fehgvmx8","slide":9,"text":"Fallback și trasabilitate","textPreview":"Fallback și trasabilitate","textChars":25,"textLines":1,"bbox":[766,478,434,28]}
+{"kind":"textbox","id":"sh/gfqh4ret","slide":9,"text":"Dacă un batch AI eșuează, ranking-ul calculat rămâne valid; seturile și contextul căutării sunt persistate.","textPreview":"Dacă un batch AI eșuează, ranking-ul calculat rămâne valid; seturile și contextul căutării sunt persistate.","textChars":107,"textLines":1,"bbox":[766,509,434,50]}
+{"kind":"textbox","id":"sh/10jyxwfe","slide":9,"text":"Implementare: OpenAlex → deduplicare → vectori TF–IDF → scor pe 6 componente → reranking AI JSON în batch-uri.","textPreview":"Implementare: OpenAlex → deduplicare → vectori TF–IDF → scor pe 6 componente → reranking AI JSON în batch-uri.","textChars":110,"textLines":1,"bbox":[744,590,456,36]}
+{"kind":"textbox","id":"sh/uhofqxwj","slide":9,"name":"footer-9","text":"Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 3","textPreview":"Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 3","textChars":50,"textLines":1,"bbox":[48,674,960,18]}
+{"kind":"textbox","id":"sh/vixgjix4","slide":9,"name":"slide-number-9","text":"09","textPreview":"09","textChars":2,"textLines":1,"bbox":[1170,670,62,22]}
+{"kind":"image","id":"im/lgfihkry","slide":9,"name":"","alt":"Captură reală din Library, rezultate Discovery și scor hibrid","bbox":[58,178,640,438]}
+{"kind":"notes","id":"nt/rwrqnb","slide":9,"text":"Explic diferența dintre search și ranking. OpenAlex oferă candidații; aplicația deduplică și calculează un scor determinist înainte de reevaluarea AI. Eșecul AI nu distruge rezultatele de bază.\n\n[Sources]\n- pages/2_Library.py\n- services/openalex_service.py\n- services/discovery_service.py\n- db/discovery_queries.py\n- tests/test_discovery.py\n- tests/test_discovery_persistence.py\n- .codex_build/internship_presentation_v2/real_screenshots/discovery-results-real.png"}
+{"kind":"slide","id":"sl/ejbnob","slide":10,"title":"ETAPA 4 · 21–23 IULIE","textShapes":12}
+{"kind":"textbox","id":"sh/k7q1kz25","slide":10,"name":"kicker-10","text":"ETAPA 4 · 21–23 IULIE","textPreview":"ETAPA 4 · 21–23 IULIE","textChars":21,"textLines":1,"bbox":[48,34,460,24]}
+{"kind":"textbox","id":"sh/j6h0bu1k","slide":10,"name":"title-10","text":"Paper Writing leagă textul de surse și versiuni","textPreview":"Paper Writing leagă textul de surse și versiuni","textChars":47,"textLines":1,"bbox":[48,70,1184,70]}
+{"kind":"shape","id":"sh/i58jipkz","slide":10,"bbox":[48,145,1184,1]}
+{"kind":"shape","id":"sh/x4zi9kje","slide":10,"bbox":[48,174,118,26]}
+{"kind":"textbox","id":"sh/w3q1gf2t","slide":10,"text":"REDACTARE","textPreview":"REDACTARE","textChars":9,"textLines":1,"bbox":[57,178,100,18]}
+{"kind":"shape","id":"sh/v2x07a18","slide":10,"bbox":[48,233,8,8]}
+{"kind":"textbox","id":"sh/a1ojepkn","slide":10,"text":"Manuscris structurat","textPreview":"Manuscris structurat","textChars":20,"textLines":1,"bbox":[70,226,478,28]}
+{"kind":"textbox","id":"sh/90fi5kji","slide":10,"text":"Outline științific, editor Markdown cu toolbar, autosave și obiecte numerotate: figuri, tabele și ecuații.","textPreview":"Outline științific, editor Markdown cu toolbar, autosave și obiecte numerotate: figuri, tabele și ecuații.","textChars":106,"textLines":1,"bbox":[70,257,478,50]}
+{"kind":"shape","id":"sh/8z61cf2x","slide":10,"bbox":[48,353,8,8]}
+{"kind":"textbox","id":"sh/m9svi5cz","slide":10,"text":"Dovezi și asistent AI","textPreview":"Dovezi și asistent AI","textChars":21,"textLines":1,"bbox":[70,346,478,28]}
+{"kind":"textbox","id":"sh/na1wbatk","slide":10,"text":"Sursele Library și evidențele proiectului intră explicit în contextul fiecărei sugestii.","textPreview":"Sursele Library și evidențele proiectului intră explicit în contextul fiecărei sugestii.","textChars":88,"textLines":1,"bbox":[70,377,478,50]}
+{"kind":"shape","id":"sh/8budkfa5","slide":10,"bbox":[48,461,8,8]}
+{"kind":"textbox","id":"sh/9c3edkbq","slide":10,"text":"Control editorial","textPreview":"Control editorial","textChars":17,"textLines":1,"bbox":[70,454,478,28]}
+{"kind":"textbox","id":"sh/y5svelc3","slide":10,"text":"Citări APA/Vancouver, verificări de readiness, snapshot-uri, diff, restaurare granulară și comentarii.","textPreview":"Citări APA/Vancouver, verificări de readiness, snapshot-uri, diff, restaurare granulară și comentarii.","textChars":102,"textLines":1,"bbox":[70,485,478,50]}
+{"kind":"textbox","id":"sh/z61w7qto","slide":10,"text":"Implementare: autosave prin callback-uri, context AI selectat explicit, snapshot JSON + diff și exportere Markdown/DOCX/PDF.","textPreview":"Implementare: autosave prin callback-uri, context AI selectat explicit, snapshot JSON + diff și exportere Markdown/DOCX/PDF.","textChars":124,"textLines":1,"bbox":[70,578,455,48]}
+{"kind":"shape","id":"sh/07adgvu9","slide":10,"bbox":[580,168,640,458]}
+{"kind":"textbox","id":"sh/qh8valc7","slide":10,"name":"footer-10","text":"Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 4","textPreview":"Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 4","textChars":50,"textLines":1,"bbox":[48,674,960,18]}
+{"kind":"textbox","id":"sh/bihc3qtc","slide":10,"name":"slide-number-10","text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[1170,670,62,22]}
+{"kind":"image","id":"im/udgj6x4r","slide":10,"name":"","alt":"Captură reală din Paper Writing cu editor și asistent contextual","bbox":[590,178,620,438]}
+{"kind":"notes","id":"nt/ejbnob","slide":10,"text":"Paper Writing este cel mai complex modul. Sugestiile AI nu înlocuiesc direct textul fără control: utilizatorul vede propunerea și schimbările. Versiunile permit restaurarea întregului manuscris sau a unei singure secțiuni.\n\n[Sources]\n- pages/3_Paper_Writing.py\n- db/writing_queries.py\n- services/writing_service.py\n- services/manuscript_review_service.py\n- services/manuscript_export_service.py\n- tests/test_writing.py\n- .codex_build/internship_presentation_v2/real_screenshots/paper-writing-real.png"}
+{"kind":"slide","id":"sl/s0l4jy","slide":11,"title":"ETAPA 5 · 03 AUGUST","textShapes":12}
+{"kind":"textbox","id":"sh/4by9g7mx","slide":11,"name":"kicker-11","text":"ETAPA 5 · 03 AUGUST","textPreview":"ETAPA 5 · 03 AUGUST","textChars":19,"textLines":1,"bbox":[48,34,460,24]}
+{"kind":"textbox","id":"sh/japsn2ls","slide":11,"name":"title-11","text":"Data Analysis face fluxurile ML reproductibile","textPreview":"Data Analysis face fluxurile ML reproductibile","textChars":46,"textLines":1,"bbox":[48,70,1184,70]}
+{"kind":"shape","id":"sh/i9grex47","slide":11,"bbox":[48,145,1184,1]}
+{"kind":"shape","id":"sh/tgratc3u","slide":11,"bbox":[48,168,670,458]}
+{"kind":"shape","id":"sh/re9sr2lo","slide":11,"bbox":[754,174,118,26]}
+{"kind":"textbox","id":"sh/6d0rix43","slide":11,"text":"ANALIZĂ","textPreview":"ANALIZĂ","textChars":7,"textLines":1,"bbox":[763,178,100,18]}
+{"kind":"shape","id":"sh/9k7ahsna","slide":11,"bbox":[754,233,8,8]}
+{"kind":"textbox","id":"sh/8je98nm5","slide":11,"text":"Ingestie și profilare","textPreview":"Ingestie și profilare","textChars":21,"textLines":1,"bbox":[776,226,424,28]}
+{"kind":"textbox","id":"sh/a9gvql4v","slide":11,"text":"CSV, TSV, XLSX și JSON; verificări de dimensiune, coloane, valori lipsă, duplicate și tipuri.","textPreview":"CSV, TSV, XLSX și JSON; verificări de dimensiune, coloane, valori lipsă, duplicate și tipuri.","textChars":93,"textLines":1,"bbox":[776,257,424,50]}
+{"kind":"shape","id":"sh/bapcjq5g","slide":11,"bbox":[754,349,8,8]}
+{"kind":"textbox","id":"sh/wbydsvml","slide":11,"text":"Pipeline scikit-learn","textPreview":"Pipeline scikit-learn","textChars":21,"textLines":1,"bbox":[776,342,424,28]}
+{"kind":"textbox","id":"sh/xc7ul0n6","slide":11,"text":"5 obiective, 10 algoritmi, imputare, scalare, encoding și seed determinist 42.","textPreview":"5 obiective, 10 algoritmi, imputare, scalare, encoding și seed determinist 42.","textChars":78,"textLines":1,"bbox":[776,373,424,50]}
+{"kind":"shape","id":"sh/yd0vu54r","slide":11,"bbox":[754,465,8,8]}
+{"kind":"textbox","id":"sh/je9cna5c","slide":11,"text":"Rezultate persistente","textPreview":"Rezultate persistente","textChars":21,"textLines":1,"bbox":[776,458,424,28]}
+{"kind":"textbox","id":"sh/kfidwvmx","slide":11,"text":"Metrici și grafice specifice, predicții, istoric de rulări și artefacte private: CSV + raport Markdown.","textPreview":"Metrici și grafice specifice, predicții, istoric de rulări și artefacte private: CSV + raport Markdown.","textChars":103,"textLines":1,"bbox":[776,489,424,50]}
+{"kind":"textbox","id":"sh/lgrup0ni","slide":11,"text":"Implementare: validare tabulară → ColumnTransformer → estimator scikit-learn → metrici/diagrame → run + artefacte persistate.","textPreview":"Implementare: validare tabulară → ColumnTransformer → estimator scikit-learn → metrici/diagrame → run + artefacte persistate.","textChars":125,"textLines":1,"bbox":[754,576,446,48]}
+{"kind":"textbox","id":"sh/6h0vy543","slide":11,"name":"footer-11","text":"Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 5","textPreview":"Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 5","textChars":50,"textLines":1,"bbox":[48,674,960,18]}
+{"kind":"textbox","id":"sh/7i9wra5o","slide":11,"name":"slide-number-11","text":"11","textPreview":"11","textChars":2,"textLines":1,"bbox":[1170,670,62,22]}
+{"kind":"image","id":"im/9sf2l4zm","slide":11,"name":"","alt":"Captură reală din Data Analysis cu rezultate și grafice","bbox":[58,178,650,438]}
+{"kind":"notes","id":"nt/s0l4jy","slide":11,"text":"Modulul separă validarea datelor, preprocessing-ul și estimatorul. Sunt acoperite clasificarea, regresia, clustering-ul, reducerea dimensionalității și detectarea anomaliilor.\n\n[Sources]\n- pages/4_Data_Analysis.py\n- services/data_analysis_service.py\n- db/data_analysis_queries.py\n- tests/test_data_analysis.py\n- .codex_build/internship_presentation_v2/real_screenshots/data-analysis-real.png"}
+{"kind":"slide","id":"sl/kwuafp","slide":12,"title":"ETAPA 6 · 29 IULIE–06 AUGUST","textShapes":16}
+{"kind":"textbox","id":"sh/0jaxsnyt","slide":12,"name":"kicker-12","text":"ETAPA 6 · 29 IULIE–06 AUGUST","textPreview":"ETAPA 6 · 29 IULIE–06 AUGUST","textChars":28,"textLines":1,"bbox":[48,34,460,24]}
+{"kind":"textbox","id":"sh/zi1gjih8","slide":12,"name":"title-12","text":"Cloud-ul a fost construit în jurul izolării datelor","textPreview":"Cloud-ul a fost construit în jurul izolării datelor","textChars":51,"textLines":1,"bbox":[48,70,1184,70]}
+{"kind":"shape","id":"sh/yhsfqdgn","slide":12,"bbox":[48,145,1184,1]}
+{"kind":"shape","id":"sh/dgjyhszi","slide":12,"bbox":[326,314,96,0]}
+{"kind":"shape","id":"sh/cfaxonyx","slide":12,"bbox":[742,314,96,0]}
+{"kind":"shape","id":"sh/be1gfihc","slide":12,"bbox":[48,220,278,190]}
+{"kind":"textbox","id":"sh/qdsfmdgr","slide":12,"text":"Auth0 / OIDC","textPreview":"Auth0 / OIDC","textChars":12,"textLines":1,"bbox":[70,253,234,36]}
+{"kind":"textbox","id":"sh/pcjed8z6","slide":12,"text":"iss + sub verificate\nrol authenticated\nsesiune Streamlit","textPreview":"iss + sub verificate | rol authenticated | sesiune Streamlit","textChars":56,"textLines":3,"bbox":[70,313,234,78]}
+{"kind":"shape","id":"sh/obqxk3yl","slide":12,"bbox":[422,220,320,190]}
+{"kind":"textbox","id":"sh/m5s3els3","slide":12,"text":"Aplicația Streamlit","textPreview":"Aplicația Streamlit","textChars":19,"textLines":1,"bbox":[444,253,276,36]}
+{"kind":"textbox","id":"sh/nq1knq9o","slide":12,"text":"scope privat per utilizator\nservicii + query layer\nID token server-side","textPreview":"scope privat per utilizator | servicii + query layer | ID token server-side","textChars":71,"textLines":3,"bbox":[444,313,276,78]}
+{"kind":"shape","id":"sh/8ralgba9","slide":12,"bbox":[838,220,394,190]}
+{"kind":"textbox","id":"sh/9sj2pgru","slide":12,"text":"Supabase","textPreview":"Supabase","textChars":8,"textLines":1,"bbox":[860,253,350,36]}
+{"kind":"textbox","id":"sh/y183a1s7","slide":12,"text":"PostgreSQL + RLS forțat\nStorage privat în users/<uuid>/…\nștergere completă workspace","textPreview":"PostgreSQL + RLS forțat | Storage privat în users/<uuid>/… | ștergere completă workspace","textChars":84,"textLines":3,"bbox":[860,313,350,78]}
+{"kind":"shape","id":"sh/z2hkj69s","slide":12,"bbox":[48,458,1184,1]}
+{"kind":"textbox","id":"sh/03alcbad","slide":12,"text":"RLS + prefix privat","textPreview":"RLS + prefix privat","textChars":19,"textLines":1,"bbox":[48,500,350,28]}
+{"kind":"textbox","id":"sh/l4j2lgri","slide":12,"text":"Aceeași identitate controlează rândurile și obiectele Storage.","textPreview":"Aceeași identitate controlează rândurile și obiectele Storage.","textChars":62,"textLines":1,"bbox":[48,540,350,56]}
+{"kind":"textbox","id":"sh/qx8j61sv","slide":12,"text":"Rate & concurrency limits","textPreview":"Rate & concurrency limits","textChars":25,"textLines":1,"bbox":[442,500,350,28]}
+{"kind":"textbox","id":"sh/byhkf69g","slide":12,"text":"Cote pentru Gemini, OpenAlex, transcriere și spațiu.","textPreview":"Cote pentru Gemini, OpenAlex, transcriere și spațiu.","textChars":52,"textLines":1,"bbox":[442,540,350,56]}
+{"kind":"textbox","id":"sh/f2d0n2p8","slide":12,"text":"Cache + pipeline DB","textPreview":"Cache + pipeline DB","textChars":19,"textLines":1,"bbox":[836,500,350,28]}
+{"kind":"textbox","id":"sh/e14zex8n","slide":12,"text":"Invalidare selectivă, conexiuni reutilizate și mai puține round-trip-uri.","textPreview":"Invalidare selectivă, conexiuni reutilizate și mai puține round-trip-uri.","textChars":73,"textLines":1,"bbox":[836,540,350,56]}
+{"kind":"textbox","id":"sh/14fips7e","slide":12,"name":"footer-12","text":"Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 6","textPreview":"Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 6","textChars":50,"textLines":1,"bbox":[48,674,960,18]}
+{"kind":"textbox","id":"sh/g3mhg7qt","slide":12,"name":"slide-number-12","text":"12","textPreview":"12","textChars":2,"textLines":1,"bbox":[1170,670,62,22]}
+{"kind":"notes","id":"nt/kwuafp","slide":12,"text":"Arăt lanțul identității. Auth0 autentifică, aplicația activează un UserScope, PostgreSQL folosește claim-urile pentru RLS, iar Storage acceptă numai obiecte sub prefixul utilizatorului. Optimizările reduc costul acestui model de securitate.\n\n[Sources]\n- README.md\n- utils/auth.py\n- utils/user_scope.py\n- db/database.py\n- services/supabase_storage.py\n- services/resource_limits.py\n- utils/query_cache.py\n- supabase/migrations/*.sql\n- docs/PERFORMANCE_DEPLOYMENT.md"}
+{"kind":"slide","id":"sl/ph2zsn","slide":13,"title":"ETAPA 7 · 19–21 AUGUST","textShapes":12}
+{"kind":"textbox","id":"sh/lozqd0ji","slide":13,"name":"kicker-13","text":"ETAPA 7 · 19–21 AUGUST","textPreview":"ETAPA 7 · 19–21 AUGUST","textChars":22,"textLines":1,"bbox":[48,34,460,24]}
+{"kind":"textbox","id":"sh/ylo7ilkr","slide":13,"name":"title-13","text":"Research Cases propune următorul experiment trasabil","textPreview":"Research Cases propune următorul experiment trasabil","textChars":52,"textLines":1,"bbox":[48,70,1184,70]}
+{"kind":"shape","id":"sh/zmhobq1c","slide":13,"bbox":[48,145,1184,1]}
+{"kind":"shape","id":"sh/cz6pgb21","slide":13,"bbox":[48,168,660,380]}
+{"kind":"shape","id":"sh/axo7e1kv","slide":13,"bbox":[744,174,118,26]}
+{"kind":"textbox","id":"sh/byxo761g","slide":13,"text":"PROPUNERE","textPreview":"PROPUNERE","textChars":9,"textLines":1,"bbox":[753,178,100,18]}
+{"kind":"shape","id":"sh/wvapsf25","slide":13,"bbox":[744,233,8,8]}
+{"kind":"textbox","id":"sh/hgjqlkjq","slide":13,"text":"Caz semantic standardizat","textPreview":"Caz semantic standardizat","textChars":25,"textLines":1,"bbox":[766,226,434,28]}
+{"kind":"textbox","id":"sh/pg3m58bq","slide":13,"text":"Articolul sau abstractul devine JSON validat: context, soluție, strategii, rezultate și fragmente-sursă.","textPreview":"Articolul sau abstractul devine JSON validat: context, soluție, strategii, rezultate și fragmente-sursă.","textChars":104,"textLines":1,"bbox":[766,257,434,50]}
+{"kind":"shape","id":"sh/ofulc3u5","slide":13,"bbox":[744,357,8,8]}
+{"kind":"textbox","id":"sh/nel43yt0","slide":13,"text":"Retrieval explicabil","textPreview":"Retrieval explicabil","textChars":20,"textLines":1,"bbox":[766,350,434,28]}
+{"kind":"textbox","id":"sh/2dc3adcf","slide":13,"text":"Embedding persistent, cosine similarity și top-k; fiecare exemplu păstrează rangul, scorul și dovada.","textPreview":"Embedding persistent, cosine similarity și top-k; fiecare exemplu păstrează rangul, scorul și dovada.","textChars":101,"textLines":1,"bbox":[766,381,434,50]}
+{"kind":"shape","id":"sh/1c3m18bu","slide":13,"bbox":[744,475,8,8]}
+{"kind":"textbox","id":"sh/0bul83u9","slide":13,"text":"Experiment complet","textPreview":"Experiment complet","textChars":18,"textLines":1,"bbox":[766,468,434,28]}
+{"kind":"textbox","id":"sh/fal4zyto","slide":13,"text":"Provider-ul AI sintetizează obiectiv, ipoteză, variabile, controale, replici, procedură, metrici și riscuri.","textPreview":"Provider-ul AI sintetizează obiectiv, ipoteză, variabile, controale, replici, procedură, metrici și riscuri.","textChars":108,"textLines":1,"bbox":[766,499,434,50]}
+{"kind":"textbox","id":"sh/e9c36tc3","slide":13,"text":"Implementare: schema JSON → hash de sursă → embedding → retrieval → taxonomie → răspuns final validat; cercetătorul decide aplicarea.","textPreview":"Implementare: schema JSON → hash de sursă → embedding → retrieval → taxonomie → răspuns final validat; cercetătorul decide aplicarea.","textChars":133,"textLines":1,"bbox":[58,570,1142,48]}
+{"kind":"textbox","id":"sh/l87mdsby","slide":13,"name":"footer-13","text":"Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 7","textPreview":"Vlad Ciripescu  ·  Research Journal AI  ·  ETAPA 7","textChars":50,"textLines":1,"bbox":[48,674,960,18]}
+{"kind":"textbox","id":"sh/k7e5knad","slide":13,"name":"slide-number-13","text":"13","textPreview":"13","textChars":2,"textLines":1,"bbox":[1170,670,62,22]}
+{"kind":"image","id":"im/g7y1oni5","slide":13,"name":"","alt":"Captură reală din Experiment Recommendations și Research Case Library","bbox":[58,178,640,360]}
+{"kind":"notes","id":"nt/ph2zsn","slide":13,"text":"Închei cronologia cu funcția cea mai nouă. Fiecare articol devine un caz semantic standardizat; retrieval-ul selectează sursele relevante, iar un al doilea pas sintetizează o propunere experimentală completă. Răspunsul este validat față de o schemă JSON și păstrează evidența folosită, dar nu execută automat experimentul.\n\n[Sources]\n- README.md\n- pages/2_Library.py\n- services/research_case_service.py\n- db/research_case_queries.py\n- supabase/migrations/20260819130000_add_research_cases.sql\n- tests/test_research_cases.py\n- commit 72e11e6\n- .codex_build/internship_presentation_v2/real_screenshots/research-cases-real.png"}
+{"kind":"slide","id":"sl/hf3fa0","slide":14,"title":"DOVEZI DE INGINERIE","textShapes":23}
+{"kind":"textbox","id":"sh/c725wb21","slide":14,"name":"kicker-14","text":"DOVEZI DE INGINERIE","textPreview":"DOVEZI DE INGINERIE","textChars":19,"textLines":1,"bbox":[48,34,460,24]}
+{"kind":"textbox","id":"sh/r6ton6lg","slide":14,"name":"title-14","text":"Calitatea este verificabilă în repository și teste","textPreview":"Calitatea este verificabilă în repository și teste","textChars":50,"textLines":1,"bbox":[48,70,1184,70]}
+{"kind":"shape","id":"sh/q5knu1kv","slide":14,"bbox":[48,145,1184,1]}
+{"kind":"textbox","id":"sh/1wb6tgji","slide":14,"text":"34","textPreview":"34","textChars":2,"textLines":1,"bbox":[48,216,250,64]}
+{"kind":"textbox","id":"sh/0b2p0v2x","slide":14,"text":"commit-uri","textPreview":"commit-uri","textChars":10,"textLines":1,"bbox":[48,292,250,30]}
+{"kind":"textbox","id":"sh/zatorq1s","slide":14,"text":"32 fără merge","textPreview":"32 fără merge","textChars":13,"textLines":1,"bbox":[48,340,250,24]}
+{"kind":"shape","id":"sh/e9k7ylk7","slide":14,"bbox":[322,210,1,182]}
+{"kind":"textbox","id":"sh/hgr6hw3e","slide":14,"text":"65","textPreview":"65","textChars":2,"textLines":1,"bbox":[344,216,250,64]}
+{"kind":"textbox","id":"sh/gfi5or2t","slide":14,"text":"fișiere Python","textPreview":"fișiere Python","textChars":14,"textLines":1,"bbox":[344,292,250,30]}
+{"kind":"textbox","id":"sh/mt8juxwr","slide":14,"text":"aplicație + teste","textPreview":"aplicație + teste","textChars":17,"textLines":1,"bbox":[344,340,250,24]}
+{"kind":"shape","id":"sh/7uh032dc","slide":14,"bbox":[618,210,1,182]}
+{"kind":"textbox","id":"sh/8va1w7ex","slide":14,"text":"31.541","textPreview":"31.541","textChars":6,"textLines":1,"bbox":[640,216,250,64]}
+{"kind":"textbox","id":"sh/9wji5cvi","slide":14,"text":"linii Python","textPreview":"linii Python","textChars":12,"textLines":1,"bbox":[640,292,250,30]}
+{"kind":"textbox","id":"sh/uxsjyxw3","slide":14,"text":"cod funcțional","textPreview":"cod funcțional","textChars":14,"textLines":1,"bbox":[640,340,250,24]}
+{"kind":"shape","id":"sh/vy1072do","slide":14,"bbox":[914,210,1,182]}
+{"kind":"textbox","id":"sh/gza107e9","slide":14,"text":"87 / 87","textPreview":"87 / 87","textChars":7,"textLines":1,"bbox":[936,216,250,64]}
+{"kind":"textbox","id":"sh/h0ji9cve","slide":14,"text":"teste trecute","textPreview":"teste trecute","textChars":13,"textLines":1,"bbox":[936,292,250,30]}
+{"kind":"textbox","id":"sh/i1sj2hwz","slide":14,"text":"rulare completă","textPreview":"rulare completă","textChars":15,"textLines":1,"bbox":[936,340,250,24]}
+{"kind":"shape","id":"sh/321kbmdk","slide":14,"bbox":[48,423,1184,1]}
+{"kind":"textbox","id":"sh/fql0zmts","slide":14,"text":"Funcțional","textPreview":"Funcțional","textChars":10,"textLines":1,"bbox":[48,468,350,30]}
+{"kind":"textbox","id":"sh/epczqhc7","slide":14,"text":"Data Analysis, Discovery, Library, Writing și Research Cases.","textPreview":"Data Analysis, Discovery, Library, Writing și Research Cases.","textChars":61,"textLines":1,"bbox":[48,510,350,70]}
+{"kind":"textbox","id":"sh/1s3i1wby","slide":14,"text":"Securitate","textPreview":"Securitate","textChars":10,"textLines":1,"bbox":[442,468,350,30]}
+{"kind":"textbox","id":"sh/0ruhsrad","slide":14,"text":"Izolare utilizatori, input neîncrezător, limite, fișiere și Storage.","textPreview":"Izolare utilizatori, input neîncrezător, limite, fișiere și Storage.","textChars":68,"textLines":1,"bbox":[442,510,350,70]}
+{"kind":"textbox","id":"sh/r2l0v2tw","slide":14,"text":"Infrastructură","textPreview":"Infrastructură","textChars":14,"textLines":1,"bbox":[836,468,350,30]}
+{"kind":"textbox","id":"sh/q1szmhcb","slide":14,"text":"PostgreSQL/RLS, cache, pipeline, migrare și fallback local.","textPreview":"PostgreSQL/RLS, cache, pipeline, migrare și fallback local.","textChars":59,"textLines":1,"bbox":[836,510,350,70]}
+{"kind":"shape","id":"sh/d43ixcbm","slide":14,"bbox":[48,611,1184,4]}
+{"kind":"textbox","id":"sh/s3uho7u1","slide":14,"text":"Ultima verificare: 24 august 2026 · suita completă a rulat cu status OK.","textPreview":"Ultima verificare: 24 august 2026 · suita completă a rulat cu status OK.","textChars":72,"textLines":1,"bbox":[48,625,1184,28]}
+{"kind":"textbox","id":"sh/3y10r2tk","slide":14,"name":"footer-14","text":"Vlad Ciripescu  ·  Research Journal AI  ·  CALITATE","textPreview":"Vlad Ciripescu  ·  Research Journal AI  ·  CALITATE","textChars":51,"textLines":1,"bbox":[48,674,960,18]}
+{"kind":"textbox","id":"sh/ixszixcz","slide":14,"name":"slide-number-14","text":"14","textPreview":"14","textChars":2,"textLines":1,"bbox":[1170,670,62,22]}
+{"kind":"notes","id":"nt/hf3fa0","slide":14,"text":"Metricile au fost recalculate înaintea generării prezentării. Am rulat suita completă cu unittest: toate cele 87 de teste au trecut. Categoriile acoperă atât funcțiile principale, cât și securitatea și infrastructura.\n\n[Sources]\n- git rev-list --count HEAD\n- git rev-list --no-merges --count HEAD\n- rg --files / wc metrics over *.py\n- tests/*.py\n- unittest discover run on 2026-08-24"}
+{"kind":"slide","id":"sl/bct6qt","slide":15,"title":"CONCLUZIE","textShapes":21}
+{"kind":"textbox","id":"sh/alozi5gr","slide":15,"text":"CONCLUZIE","textPreview":"CONCLUZIE","textChars":9,"textLines":1,"bbox":[48,44,240,24]}
+{"kind":"textbox","id":"sh/xofidkz2","slide":15,"text":"Un singur fir: de la observație la manuscris","textPreview":"Un singur fir: de la observație la manuscris","textChars":44,"textLines":1,"bbox":[48,90,1184,72]}
+{"kind":"shape","id":"sh/cn6hkfyh","slide":15,"bbox":[188,294,114,0]}
+{"kind":"shape","id":"sh/zqx0fah8","slide":15,"bbox":[418,294,114,0]}
+{"kind":"shape","id":"sh/ypozmpgn","slide":15,"bbox":[648,294,114,0]}
+{"kind":"shape","id":"sh/lszihkze","slide":15,"bbox":[878,294,114,0]}
+{"kind":"shape","id":"sh/kr61ofyt","slide":15,"bbox":[88,252,84,84]}
+{"kind":"textbox","id":"sh/fud03qh4","slide":15,"text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[110,276,40,26]}
+{"kind":"textbox","id":"sh/et4zalgj","slide":15,"text":"Capturare","textPreview":"Capturare","textChars":9,"textLines":1,"bbox":[54,354,152,30]}
+{"kind":"shape","id":"sh/w7qhwzap","slide":15,"bbox":[318,252,84,84]}
+{"kind":"textbox","id":"sh/x8zip4ra","slide":15,"text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[340,276,40,26]}
+{"kind":"textbox","id":"sh/a58zupsj","slide":15,"text":"Înțelegere","textPreview":"Înțelegere","textChars":10,"textLines":1,"bbox":[284,354,152,30]}
+{"kind":"shape","id":"sh/b6hgnu94","slide":15,"bbox":[548,252,84,84]}
+{"kind":"textbox","id":"sh/kbah0jal","slide":15,"text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[570,276,40,26]}
+{"kind":"textbox","id":"sh/lcjit4r6","slide":15,"text":"Literatură","textPreview":"Literatură","textChars":10,"textLines":1,"bbox":[514,354,152,30]}
+{"kind":"shape","id":"sh/y9szy9sv","slide":15,"bbox":[778,252,84,84]}
+{"kind":"textbox","id":"sh/ja10re90","slide":15,"text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[800,276,40,26]}
+{"kind":"textbox","id":"sh/0f6hofah","slide":15,"text":"Analiză","textPreview":"Analiză","textChars":7,"textLines":1,"bbox":[744,354,152,30]}
+{"kind":"shape","id":"sh/1gfyhkb2","slide":15,"bbox":[1008,252,84,84]}
+{"kind":"textbox","id":"sh/hk765cze","slide":15,"text":"5","textPreview":"5","textChars":1,"textLines":1,"bbox":[1030,276,40,26]}
+{"kind":"textbox","id":"sh/gze5w7yt","slide":15,"text":"Redactare","textPreview":"Redactare","textChars":9,"textLines":1,"bbox":[974,354,152,30]}
+{"kind":"shape","id":"sh/vy5o32ho","slide":15,"bbox":[48,432,1184,1]}
+{"kind":"textbox","id":"sh/uxwnuxg3","slide":15,"text":"Produs","textPreview":"Produs","textChars":6,"textLines":1,"bbox":[48,476,350,32]}
+{"kind":"textbox","id":"sh/5o769wzq","slide":15,"text":"Un workflow coerent pentru munca reală a cercetătorului.","textPreview":"Un workflow coerent pentru munca reală a cercetătorului.","textChars":56,"textLines":1,"bbox":[48,525,350,62]}
+{"kind":"textbox","id":"sh/4ny50ry5","slide":15,"text":"Inginerie","textPreview":"Inginerie","textChars":9,"textLines":1,"bbox":[442,476,350,32]}
+{"kind":"textbox","id":"sh/3mpo7mhk","slide":15,"text":"Arhitectură modulară, cloud securizat și fallback-uri testabile.","textPreview":"Arhitectură modulară, cloud securizat și fallback-uri testabile.","textChars":64,"textLines":1,"bbox":[442,525,350,62]}
+{"kind":"textbox","id":"sh/ilgnyhgz","slide":15,"text":"AI responsabil","textPreview":"AI responsabil","textChars":14,"textLines":1,"bbox":[836,476,350,32]}
+{"kind":"textbox","id":"sh/dsr6dwzm","slide":15,"text":"Grounding, scheme, trasabilitate și control uman la fiecare etapă.","textPreview":"Grounding, scheme, trasabilitate și control uman la fiecare etapă.","textChars":66,"textLines":1,"bbox":[836,525,350,62]}
+{"kind":"textbox","id":"sh/sryp4ry1","slide":15,"text":"Proiectul demonstrează o evoluție completă: idee → produs → infrastructură → validare.","textPreview":"Proiectul demonstrează o evoluție completă: idee → produs → infrastructură → validare.","textChars":86,"textLines":1,"bbox":[48,622,1184,34]}
+{"kind":"textbox","id":"sh/axs3ytwj","slide":15,"name":"footer-15","text":"Vlad Ciripescu  ·  Research Journal AI  ·  CONCLUZIE","textPreview":"Vlad Ciripescu  ·  Research Journal AI  ·  CONCLUZIE","textChars":52,"textLines":1,"bbox":[48,674,960,18]}
+{"kind":"textbox","id":"sh/by1k7yx4","slide":15,"name":"slide-number-15","text":"15","textPreview":"15","textChars":2,"textLines":1,"bbox":[1170,670,62,22]}
+{"kind":"notes","id":"nt/bct6qt","slide":15,"text":"Revin la problema de la început și arăt că firul informației nu se mai rupe. Închei cu cele trei dimensiuni ale rezultatului: valoare de produs, calitate de inginerie și utilizare responsabilă a AI-ului.\n\n[Sources]\n- README.md\n- Git history\n- pages/*.py\n- services/*.py\n- tests/*.py"}

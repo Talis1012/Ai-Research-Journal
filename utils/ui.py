@@ -5,7 +5,7 @@ from textwrap import dedent
 
 import streamlit as st
 
-from utils.auth import current_user_profile, logout
+from utils.auth import authenticated_callback, current_user_profile, logout
 from services.workspace_service import delete_current_user_workspace
 from utils.content_safety import sanitize_untrusted_markdown
 
@@ -287,6 +287,50 @@ def render_html(markup: str):
     st.html(dedent(str(markup)).strip())
 
 
+def _escaped_toast_markdown(value: str) -> str:
+    escaped = str(value or "")
+
+    for character in ("\\", "*", "_", "[", "]", "`", "#", ">", "|"):
+        escaped = escaped.replace(character, f"\\{character}")
+
+    return escaped
+
+
+@st.fragment(run_every="10s")
+@authenticated_callback
+def render_due_reminder_notifications():
+    """Show newly due reminders while any authenticated app page is open."""
+    from datetime import datetime, timedelta
+
+    from db.calendar_queries import (
+        get_due_calendar_reminders,
+        mark_calendar_reminder_notified,
+    )
+
+    now = datetime.now()
+    due_reminders = get_due_calendar_reminders(
+        now,
+        since=now - timedelta(days=1),
+        limit=3,
+    )
+
+    for reminder in due_reminders:
+        if not mark_calendar_reminder_notified(reminder["id"]):
+            continue
+
+        reminder_at = reminder["reminder_at"]
+
+        if not isinstance(reminder_at, datetime):
+            reminder_at = datetime.fromisoformat(str(reminder_at))
+
+        st.toast(
+            f"**{_escaped_toast_markdown(reminder['title'])}**  \n"
+            f"{reminder_at.strftime('%H:%M')}",
+            icon=":material/priority_high:",
+            duration="long",
+        )
+
+
 def compact_date(value: str | None) -> str:
     if not value:
         return ""
@@ -561,6 +605,42 @@ def load_css():
             align-items: center;
             justify-content: center;
             border: 2px solid #ffffff;
+        }
+
+        [data-testid="stToastContainer"] {
+            top: auto !important;
+            right: auto !important;
+            bottom: 24px !important;
+            left: 24px !important;
+            z-index: 10000 !important;
+        }
+
+        [data-testid="stToast"] {
+            width: min(340px, calc(100vw - 48px)) !important;
+            min-height: 82px !important;
+            padding: 16px 18px !important;
+            gap: 15px !important;
+            border: 1px solid #c9dcf7 !important;
+            border-radius: 12px !important;
+            background: #ffffff !important;
+            color: #101828 !important;
+            filter: none !important;
+            box-shadow: 0 18px 44px rgba(23, 105, 210, 0.2) !important;
+        }
+
+        [data-testid="stToastDynamicIcon"] {
+            color: #1769d2 !important;
+            font-size: 2.15rem !important;
+            line-height: 1 !important;
+            flex: 0 0 auto !important;
+        }
+
+        [data-testid="stToast"] strong {
+            display: inline-block;
+            color: #101828;
+            font-size: 0.94rem;
+            font-weight: 850;
+            margin-bottom: 4px;
         }
 
         .user-chip {
@@ -1688,6 +1768,12 @@ def sidebar_nav(active_page: str = "experiments"):
             "Data Analysis",
         ),
         ("paper_writing", "pages/3_Paper_Writing.py", "✍️", "Paper Writing"),
+        (
+            "calendar",
+            "pages/5_Calendar.py",
+            ":material/calendar_month:",
+            "Calendar",
+        ),
     ]
 
     for item_id, page_path, icon, label in items:

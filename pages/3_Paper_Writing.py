@@ -85,6 +85,7 @@ from utils.ui import (
     header_icons,
     load_css,
     render_html,
+    render_due_reminder_notifications,
     render_untrusted_caption,
     render_untrusted_markdown,
     safe_html,
@@ -102,6 +103,7 @@ st.set_page_config(
 require_auth()
 init_db_once(st.session_state)
 load_css()
+render_due_reminder_notifications()
 
 
 def render_page_css():
