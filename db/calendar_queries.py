@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from db.database import get_connection
+from utils.timezone import parse_utc_datetime, timezone_from_name
 
 
 MAX_REMINDER_TITLE_LENGTH = 160
@@ -11,7 +12,10 @@ def _normalized_datetime(value: datetime) -> str:
     if not isinstance(value, datetime):
         raise ValueError("Reminder time must be a valid date and time.")
 
-    return value.replace(microsecond=0, tzinfo=None).isoformat(sep=" ")
+    return parse_utc_datetime(value).isoformat(
+        sep=" ",
+        timespec="seconds",
+    )
 
 
 def _validated_content(title: str, notes: str | None) -> tuple[str, str | None]:
@@ -38,19 +42,27 @@ def create_calendar_reminder(
     title: str,
     reminder_at: datetime,
     notes: str | None = None,
+    timezone_name: str = "UTC",
 ) -> int:
     normalized_title, normalized_notes = _validated_content(title, notes)
+    normalized_timezone = timezone_from_name(timezone_name).key
     conn = get_connection()
     cur = conn.cursor()
     cur.execute(
         """
-        INSERT INTO calendar_reminders (title, reminder_at, notes)
-        VALUES (?, ?, ?)
+        INSERT INTO calendar_reminders (
+            title,
+            reminder_at,
+            notes,
+            timezone_name
+        )
+        VALUES (?, ?, ?, ?)
         """,
         (
             normalized_title,
             _normalized_datetime(reminder_at),
             normalized_notes,
+            normalized_timezone,
         ),
     )
     reminder_id = cur.lastrowid

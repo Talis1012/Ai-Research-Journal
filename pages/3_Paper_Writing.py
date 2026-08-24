@@ -2,7 +2,6 @@ import difflib
 import hashlib
 import math
 import re
-from datetime import datetime
 
 import pandas as pd
 import streamlit as st
@@ -80,6 +79,7 @@ from utils.auth import authenticated_callback, require_auth
 from utils.content_safety import safe_external_url
 from utils.markdown_toolbar import render_markdown_toolbar
 from utils.query_cache import cached_read
+from utils.timezone import user_now
 from utils.ui import (
     compact_date,
     header_icons,
@@ -331,7 +331,7 @@ def _autosave_section(section_id: int):
         section_id,
         content_md=st.session_state.get(content_key, ""),
     )
-    st.session_state["writing_last_saved_at"] = datetime.now().strftime("%H:%M:%S")
+    st.session_state["writing_last_saved_at"] = user_now().strftime("%H:%M:%S")
 
 
 @authenticated_callback
@@ -341,7 +341,7 @@ def _autosave_section_title(section_id: int):
         section_id,
         title=st.session_state.get(title_key, ""),
     )
-    st.session_state["writing_last_saved_at"] = datetime.now().strftime("%H:%M:%S")
+    st.session_state["writing_last_saved_at"] = user_now().strftime("%H:%M:%S")
 
 
 @authenticated_callback
@@ -352,7 +352,7 @@ def _save_manuscript_meta(manuscript_id: int):
         status=st.session_state[f"writing_status_{manuscript_id}"],
         citation_style=st.session_state[f"writing_style_{manuscript_id}"],
     )
-    st.session_state["writing_last_saved_at"] = datetime.now().strftime("%H:%M:%S")
+    st.session_state["writing_last_saved_at"] = user_now().strftime("%H:%M:%S")
 
 
 @authenticated_callback

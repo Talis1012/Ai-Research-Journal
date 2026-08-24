@@ -277,7 +277,8 @@ class _PostgresConnection:
                     """
                     select
                         set_config('request.jwt.claims', %s, true),
-                        set_config('role', 'authenticated', true)
+                        set_config('role', 'authenticated', true),
+                        set_config('TimeZone', 'UTC', true)
                     """,
                     (claims_json,),
                 )
@@ -298,7 +299,8 @@ class _PostgresConnection:
                     """
                     select
                         set_config('request.jwt.claims', %s, true),
-                        set_config('role', 'authenticated', true)
+                        set_config('role', 'authenticated', true),
+                        set_config('TimeZone', 'UTC', true)
                     """,
                     (claims_json,),
                 )
@@ -332,7 +334,8 @@ class _PostgresConnection:
                         """
                         select
                             set_config('request.jwt.claims', %s, true),
-                            set_config('role', 'authenticated', true)
+                            set_config('role', 'authenticated', true),
+                            set_config('TimeZone', 'UTC', true)
                         """,
                         (self._request_claims_json(),),
                     )
@@ -1444,6 +1447,7 @@ def init_db():
             title TEXT NOT NULL,
             reminder_at TIMESTAMP NOT NULL,
             notes TEXT,
+            timezone_name TEXT NOT NULL DEFAULT 'UTC',
             completed INTEGER NOT NULL DEFAULT 0,
             notified_at TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1452,6 +1456,44 @@ def init_db():
             CHECK (completed IN (0, 1))
         )
     """)
+
+    calendar_columns = cur.execute(
+        "PRAGMA table_info(calendar_reminders)"
+    ).fetchall()
+    calendar_column_names = [column["name"] for column in calendar_columns]
+
+    if "timezone_name" not in calendar_column_names:
+        # The legacy schema did not retain a browser timezone. Preserve the
+        # exact UTC instant used by its notification comparisons.
+        from utils.timezone import parse_utc_datetime
+
+        cur.execute(
+            """
+            ALTER TABLE calendar_reminders
+            ADD COLUMN timezone_name TEXT NOT NULL DEFAULT 'UTC'
+            """
+        )
+        legacy_reminders = cur.execute(
+            "SELECT id, reminder_at FROM calendar_reminders"
+        ).fetchall()
+
+        for reminder in legacy_reminders:
+            try:
+                utc_value = parse_utc_datetime(reminder["reminder_at"])
+            except (TypeError, ValueError):
+                continue
+
+            cur.execute(
+                """
+                UPDATE calendar_reminders
+                SET reminder_at = ?, timezone_name = 'UTC'
+                WHERE id = ?
+                """,
+                (
+                    utc_value.isoformat(sep=" ", timespec="seconds"),
+                    reminder["id"],
+                ),
+            )
 
     cur.execute("""
         CREATE INDEX IF NOT EXISTS idx_calendar_reminders_due

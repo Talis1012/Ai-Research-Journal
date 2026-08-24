@@ -62,6 +62,7 @@ from services.transcription_service import (
 )
 from utils.auth import authenticated_callback, require_auth
 from utils.query_cache import cached_read
+from utils.timezone import to_user_datetime, user_today
 from utils.ui import (
     chat_message,
     compact_date,
@@ -95,8 +96,8 @@ def parse_created_at(value: str | None) -> datetime | None:
         return None
 
     try:
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
+        return to_user_datetime(value)
+    except (TypeError, ValueError):
         return None
 
 
@@ -106,7 +107,7 @@ def date_group_label(value: str | None) -> str:
     if not created_at:
         return "Earlier"
 
-    today = datetime.now().date()
+    today = user_today()
 
     if created_at.date() == today:
         return "Today"
@@ -1097,7 +1098,7 @@ def render_insight_reader(
                     )
                 else:
                     render_untrusted_markdown(active_summary["content"])
-                    st.caption(f"Updated {active_summary['created_at']}")
+                    st.caption(f"Updated {compact_date(active_summary['created_at'])}")
             elif selection == "project":
                 st.info(
                     "No project summary has been generated for "

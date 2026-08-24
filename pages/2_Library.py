@@ -1,5 +1,4 @@
 import math
-from datetime import datetime
 
 import streamlit as st
 from streamlit_agraph import agraph, Config, Edge, Node
@@ -52,6 +51,7 @@ from services.research_case_service import (
 from utils.auth import authenticated_callback, require_auth
 from utils.content_safety import safe_external_url, sanitize_untrusted_markdown
 from utils.query_cache import cached_read
+from utils.timezone import user_today, utc_now
 from utils.ui import (
     chat_message,
     compact_date,
@@ -1504,10 +1504,10 @@ def _apply_discovery_snapshot(snapshot: dict, *, restore_mode: bool = False):
             search_options.get("open_access_only", False)
         )
         st.session_state["discover_ai_from_year"] = int(
-            search_options.get("from_year") or max(1900, datetime.now().year - 10)
+            search_options.get("from_year") or max(1900, user_today().year - 10)
         )
         st.session_state["discover_ai_to_year"] = int(
-            search_options.get("to_year") or datetime.now().year
+            search_options.get("to_year") or user_today().year
         )
         st.session_state["discover_ai_result_limit"] = int(
             search_options.get("result_limit") or 10
@@ -1521,10 +1521,10 @@ def _apply_discovery_snapshot(snapshot: dict, *, restore_mode: bool = False):
             search_options.get("open_access_only", False)
         )
         st.session_state["discover_manual_from_year"] = int(
-            search_options.get("from_year") or max(1900, datetime.now().year - 10)
+            search_options.get("from_year") or max(1900, user_today().year - 10)
         )
         st.session_state["discover_manual_to_year"] = int(
-            search_options.get("to_year") or datetime.now().year
+            search_options.get("to_year") or user_today().year
         )
         st.session_state["discover_manual_result_limit"] = int(
             search_options.get("result_limit") or 10
@@ -1737,7 +1737,7 @@ def _run_discovery_search(
 
 
 def _render_discovery_search_controls(projects):
-    current_year = datetime.now().year
+    current_year = user_today().year
     project_ids = [project["id"] for project in projects]
     projects_by_id = {project["id"]: project for project in projects}
     mode = st.radio(
@@ -2449,7 +2449,7 @@ def _submit_discovery_question(question: str, projects):
     history.append({
         "role": "user",
         "content": normalized_question,
-        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "created_at": utc_now().isoformat(timespec="seconds"),
     })
 
     try:
@@ -2471,7 +2471,7 @@ def _submit_discovery_question(question: str, projects):
     history.append({
         "role": "assistant",
         "content": answer,
-        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "created_at": utc_now().isoformat(timespec="seconds"),
     })
 
 

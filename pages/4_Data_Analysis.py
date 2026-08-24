@@ -1,5 +1,4 @@
 import hashlib
-from datetime import datetime
 from pathlib import Path
 
 import altair as alt
@@ -39,6 +38,7 @@ from services.library_service import (
 )
 from utils.auth import authenticated_callback, require_auth
 from utils.query_cache import cached_blob_read, cached_read
+from utils.timezone import to_user_datetime
 from utils.ui import (
     header_icons,
     load_css,
@@ -437,9 +437,9 @@ def compact_datetime(value: str | None) -> str:
         return "Unknown date"
 
     try:
-        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        parsed = to_user_datetime(value)
         return parsed.strftime("%b %-d, %Y · %H:%M")
-    except ValueError:
+    except (TypeError, ValueError):
         return str(value)
 
 

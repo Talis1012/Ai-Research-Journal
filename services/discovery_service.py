@@ -1,12 +1,12 @@
 import math
 import re
 from collections import Counter
-from datetime import date
 
 from ai.factory import get_ai_provider
 from services.resource_limits import env_int
 from services.summary_service import format_messages_for_ai
 from utils.prompts import UNTRUSTED_CONTENT_RULES, untrusted_data, user_request
+from utils.timezone import user_today
 
 
 DISCOVERY_BASE_WEIGHTS = {
@@ -226,7 +226,7 @@ def _score_candidates(
     project_vector = _tfidf_vector(project_counts, idf)
     paper_vectors = [_tfidf_vector(counts, idf) for counts in paper_counts]
     idea_vectors = [(_tfidf_vector(counts, idf), weight) for counts, weight in idea_count_rows]
-    current_year = date.today().year
+    current_year = user_today().year
     citation_rates = []
 
     for work in results:

@@ -14,6 +14,14 @@ from db.calendar_queries import (
 from db.database import DatabaseUndefinedTableError, init_db_once
 from utils.auth import require_auth
 from utils.query_cache import cached_read
+from utils.timezone import (
+    local_datetime_to_utc,
+    to_user_datetime,
+    user_now,
+    user_timezone_name,
+    user_today,
+    utc_now,
+)
 from utils.ui import (
     header_icons,
     load_css,
@@ -57,12 +65,7 @@ ROMANIAN_WEEKDAYS = ("LUN", "MAR", "MIE", "JOI", "VIN", "SÂM", "DUM")
 
 
 def reminder_datetime(value) -> datetime:
-    if isinstance(value, datetime):
-        return value.replace(tzinfo=None)
-
-    return datetime.fromisoformat(str(value).replace("Z", "+00:00")).replace(
-        tzinfo=None
-    )
+    return to_user_datetime(value)
 
 
 def month_start(value: date) -> date:
@@ -416,10 +419,12 @@ def render_page_css():
 
 @st.dialog("Reminder nou", width="small")
 def render_new_reminder_dialog(default_date: date):
+    timezone_name = user_timezone_name()
     render_html(
-        """
+        f"""
         <div style="color:#667085;font-size:.82rem;line-height:1.5;margin-bottom:8px;">
-            Alege momentul în care vrei să primești notificarea.
+            Alege momentul în care vrei să primești notificarea.<br>
+            Fus orar detectat: <strong>{safe_html(timezone_name)}</strong>
         </div>
         """
     )
@@ -442,7 +447,7 @@ def render_new_reminder_dialog(default_date: date):
         with time_col:
             reminder_time = st.time_input(
                 "Ora",
-                value=next_quarter_hour(datetime.now()),
+                value=next_quarter_hour(user_now()),
                 step=900,
             )
 
@@ -463,10 +468,15 @@ def render_new_reminder_dialog(default_date: date):
         return
 
     try:
+        reminder_at_utc = local_datetime_to_utc(
+            datetime.combine(reminder_date, reminder_time),
+            timezone_name,
+        )
         reminder_id = create_calendar_reminder(
             title,
-            datetime.combine(reminder_date, reminder_time),
+            reminder_at_utc,
             notes,
+            timezone_name,
         )
     except ValueError as exc:
         st.error(str(exc))
@@ -557,7 +567,7 @@ def render_upcoming_reminders(reminders: list[dict]):
 
 
 render_page_css()
-today = date.today()
+today = user_today()
 st.session_state.setdefault("calendar_active_month", month_start(today).isoformat())
 st.session_state.setdefault("calendar_selected_date", today.isoformat())
 
@@ -577,16 +587,25 @@ except (TypeError, ValueError):
 
 next_month = shifted_month(active_month, 1)
 calendar_schema_ready = True
+timezone_name = user_timezone_name()
 
 try:
+    month_start_utc = local_datetime_to_utc(
+        datetime.combine(active_month, time.min),
+        timezone_name,
+    )
+    next_month_utc = local_datetime_to_utc(
+        datetime.combine(next_month, time.min),
+        timezone_name,
+    )
     month_reminders = cached_read(
         get_calendar_reminders,
-        datetime.combine(active_month, time.min),
-        datetime.combine(next_month, time.min),
+        month_start_utc,
+        next_month_utc,
     )
     upcoming_reminders = cached_read(
         get_upcoming_calendar_reminders,
-        datetime.now().replace(second=0, microsecond=0),
+        utc_now().replace(second=0, microsecond=0),
         8,
     )
 except DatabaseUndefinedTableError:

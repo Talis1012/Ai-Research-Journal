@@ -1,6 +1,6 @@
 import html
 import math
-from datetime import datetime
+from datetime import timedelta
 from textwrap import dedent
 
 import streamlit as st
@@ -8,6 +8,7 @@ import streamlit as st
 from utils.auth import authenticated_callback, current_user_profile, logout
 from services.workspace_service import delete_current_user_workspace
 from utils.content_safety import sanitize_untrusted_markdown
+from utils.timezone import to_user_datetime, user_today, utc_now
 
 
 def safe_html(value) -> str:
@@ -300,15 +301,13 @@ def _escaped_toast_markdown(value: str) -> str:
 @authenticated_callback
 def render_due_reminder_notifications():
     """Show newly due reminders while any authenticated app page is open."""
-    from datetime import datetime, timedelta
-
     from db.calendar_queries import (
         get_due_calendar_reminders,
         mark_calendar_reminder_notified,
     )
     from db.database import DatabaseUndefinedTableError
 
-    now = datetime.now()
+    now = utc_now()
 
     try:
         due_reminders = get_due_calendar_reminders(
@@ -325,10 +324,7 @@ def render_due_reminder_notifications():
         if not mark_calendar_reminder_notified(reminder["id"]):
             continue
 
-        reminder_at = reminder["reminder_at"]
-
-        if not isinstance(reminder_at, datetime):
-            reminder_at = datetime.fromisoformat(str(reminder_at))
+        reminder_at = to_user_datetime(reminder["reminder_at"])
 
         st.toast(
             f"**{_escaped_toast_markdown(reminder['title'])}**  \n"
@@ -343,16 +339,16 @@ def compact_date(value: str | None) -> str:
         return ""
 
     try:
-        created = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
+        created = to_user_datetime(value)
+    except (TypeError, ValueError):
         return str(value)
 
-    now = datetime.now()
+    today = user_today()
 
-    if created.date() == now.date():
+    if created.date() == today:
         return created.strftime("%-I:%M %p")
 
-    if created.year == now.year:
+    if created.year == today.year:
         return created.strftime("%b %-d")
 
     return created.strftime("%b %-d, %Y")
